@@ -1,7 +1,7 @@
 """print functions"""
 
 GLOBAL_ERROR_COUNT = 0
-
+GLOBAL_ERROR_LIST = []
 
 class Bcolors:
     """Color definitions for console output"""
@@ -44,9 +44,12 @@ def warning(msg) -> None:
     print_color(Bcolors.WARNING, msg)
 
 
-def error(msg) -> int:
+def error(msg: str, element: str=None) -> int:
     """Prints an error message and increments the global error count"""
     global GLOBAL_ERROR_COUNT  # pylint: disable=global-statement
+    global GLOBAL_ERROR_LIST  # pylint: disable=global-variable-not-assigned
+    if element:
+        GLOBAL_ERROR_LIST.append(element)
     GLOBAL_ERROR_COUNT += 1
     print_color(Bcolors.FAIL, msg)
     return GLOBAL_ERROR_COUNT

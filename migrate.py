@@ -10,7 +10,7 @@ Usage: migrate.py [--users] [--groups] [--projects] [--all] [--notify]
 Migration script to import projects, users, groups, from Gitlab to Forgejo.
 
 Options
-  -h, --help   Show this screen
+  -h, --help  Show this screen
   --users     migrate users
   --groups    migrate groups
   --projects  migrate projects
@@ -119,13 +119,15 @@ def main():
     ):
         print()
         fg_print.warning("No migration option(s) selected, nothing to do!")
-        exit()
+        os.sys.exit()
 
     print()
     if fg_print.GLOBAL_ERROR_COUNT == 0:
         fg_print.success("Migration finished with no errors!")
     else:
         fg_print.error(f"Migration finished with {fg_print.GLOBAL_ERROR_COUNT} errors!")
+        print("Failed elements:")
+        print(*fg_print.GLOBAL_ERROR_LIST, sep="\n")
 
 
 #
@@ -251,7 +253,8 @@ def get_user_or_group(project: gitlab.v4.objects.Project) -> Dict:
             result = response.json()
         else:
             fg_print.error(
-                f"Failed to load user or group {proj_namespace_name}! {response.text}"
+                f"Failed to load user or group {proj_namespace_name}! {response.text}",
+                f"failed to load user or group {proj_namespace_name}",
             )
     session.close()
 
@@ -267,7 +270,10 @@ def get_user_keys(fg_api: pyforgejo, username: string) -> Dict:
         return json.loads(key_response.content)
 
     status_code = key_response.status_code.name
-    fg_print.error(f"Failed to load user keys for user {username}! {status_code}")
+    fg_print.error(
+        f"Failed to load user keys for user {username}! {status_code}",
+        f"failed to load user keys for user {username}",
+    )
     return []
 
 
@@ -589,6 +595,7 @@ def _import_project_repo(fg_api: pyforgejo, project: gitlab.v4.objects.Project):
         private = project.visibility == "private" or project.visibility == "internal"
 
         owner = get_user_or_group(project)
+        proj_name = name_clean(project.name)
         if owner:
             import_response: requests.Response = repo_migrate.sync_detailed(
                 body=MigrateRepoOptions(
@@ -598,22 +605,23 @@ def _import_project_repo(fg_api: pyforgejo, project: gitlab.v4.objects.Project):
                     description=project.description,
                     mirror=False,
                     private=private,
-                    repo_name=name_clean(project.name),
+                    repo_name=proj_name,
                     uid=owner["id"],
                 ),
                 client=fg_api,
             )
             if import_response.status_code.name == "CREATED":
-                fg_print.info(f"Project {name_clean(project.name)} imported!")
+                fg_print.info(f"Project {proj_name} imported!")
             else:
                 err_message = json.loads(import_response.content)["message"]
                 fg_print.error(
-                    f"Project {name_clean(project.name)} "
-                    + f"import failed: {err_message}"
+                    f"Project {proj_name} import failed: {err_message}",
+                    f"project {proj_name} import failed",
                 )
         else:
             fg_print.error(
-                f"Failed to load project owner for project {name_clean(project.name)}"
+                f"Failed to load project owner for project {proj_name}",
+                f"project {proj_name} failed to load owner",
             )
 
 
@@ -657,7 +665,7 @@ def _import_project_repo_collaborators(
                 fg_print.info(f"Collaborator {collaborator.username} imported!")
             else:
                 fg_print.error(
-                    f"Collaborator {collaborator.username} import failed: {import_response.text}"
+                    f"Collaborator {collaborator.username} import failed: {import_response.text}",
                 )
 
 
@@ -722,7 +730,10 @@ def _import_users(
                 )
             else:
                 msg = json.loads(import_response.content)["message"]
-                fg_print.error(f"User {user.username} import failed: {msg}")
+                fg_print.error(
+                    f"User {user.username} import failed: {msg}",
+                    f"failed to import user {user.username}",
+                )
 
         # import public keys
         _import_user_keys(fg_api, keys, user)
@@ -749,7 +760,10 @@ def _import_user_keys(
                 fg_print.info(f"Public key {key.title} imported!")
             else:
                 msg = json.loads(import_response.content)["message"]
-                fg_print.error(f"Public key {key.title} import failed: {msg}")
+                fg_print.error(
+                    f"Public key {key.title} import failed: {msg}",
+                    f"failed to import key {key.title} for user {user.username}",
+                )
 
 
 def _import_groups(fg_api: pyforgejo, groups: List[gitlab.v4.objects.Group]):
@@ -763,22 +777,25 @@ def _import_groups(fg_api: pyforgejo, groups: List[gitlab.v4.objects.Group]):
         print(f"Importing group {clean_group_name}...")
         print(f"Found {len(members)} gitlab members for group {name_clean(group.name)}")
 
-        if not organization_exists(fg_api, name_clean(group.name)):
+        if not organization_exists(fg_api, clean_group_name):
             import_response: requests.Response = org_create.sync_detailed(
                 body=CreateOrgOption(
                     description=group.description,
                     full_name=group.full_name,
                     location="",
-                    username=name_clean(group.name),
+                    username=clean_group_name,
                     website="",
                 ),
                 client=fg_api,
             )
             if import_response.status_code.name == "CREATED":
-                fg_print.info(f"Group {name_clean(group.name)} imported!")
+                fg_print.info(f"Group {clean_group_name} imported!")
             else:
                 msg = json.loads(import_response.content)["message"]
-                fg_print.error(f"Group {name_clean(group.name)} import failed: {msg}")
+                fg_print.error(
+                    f"Group {clean_group_name} import failed: {msg}",
+                    f"failed to import group {clean_group_name}",
+                )
         # import group members
         _import_group_members(fg_api, members, group)
 
@@ -790,7 +807,8 @@ def _import_group_members(
 ):
     """import members to a group"""
     # ? TODO: create teams based on gitlab permissions (access_level of group member)
-    existing_teams = get_teams(fg_api, name_clean(group.name))
+    clean_group_name = name_clean(group.name)
+    existing_teams = get_teams(fg_api, clean_group_name)
     if existing_teams:
         first_team = existing_teams[0]
         first_team_name = first_team["name"]
@@ -808,15 +826,17 @@ def _import_group_members(
                 )
                 if import_response.ok:
                     fg_print.info(
-                        f"Member {member.username} added to group {name_clean(group.name)}!"
+                        f"Member {member.username} added to group {clean_group_name}!"
                     )
                 else:
                     fg_print.error(
-                        f"Failed to add member {member.username} to group {name_clean(group.name)}!"
+                        f"Failed to add member {member.username} to group {clean_group_name}!"
+                        f"Failed to add member {member.username} to group {clean_group_name}!"
                     )
     else:
         fg_print.error(
-            f"Failed to import members to group {name_clean(group.name)}: no teams found!"
+            f"Failed to import members to group {clean_group_name}: no teams found!",
+            f"Failed to import members to group {clean_group_name}: no teams found!",
         )
 
 

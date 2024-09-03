@@ -5,7 +5,7 @@
 Usage: create_push_mirrors.py [--to-forgejo] [--to-gitlab] [--all] [--limit LIMIT] (--create | --delete)
        create_push_mirrors.py --help
 
-Create from Gitlab to Forgejo and vicecersa.
+Create push mirrrors from Gitlab to Forgejo and vicecersa.
 
 Options
   -h, --help     Show this screen

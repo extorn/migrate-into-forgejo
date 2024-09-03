@@ -4,7 +4,7 @@
 
 **the scripts are currently undergoing testing**
 
-This script uses the Gitlab API and a combination with Forgejo API and python `requests` to migrate all data from Gitlab to Forgejo.
+This script uses the Gitlab API and a combination of [pyforgejo](https://codeberg.org/harabat/pyforgejo) and python `requests` to migrate all data from Gitlab to Forgejo.
 
 This script supports migration of:
 
