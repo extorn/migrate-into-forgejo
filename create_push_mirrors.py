@@ -62,7 +62,8 @@ def delete_to_forgejo(gitlab_projects: list) -> None:
                     project.remote_mirrors.delete(mirror.id)
                 except Exception as err:  # pylint: disable=broad-except
                     fg_print.error(
-                        f"Error deleting push mirror on Gitlab for {proj_path}: {err}"
+                        f"Error deleting push mirror on Gitlab for {proj_path}: {err}",
+                        f"Error deleting push mirror on Gitlab for {proj_path}: {err}",
                     )
                 else:
                     fg_print.info(f"Push mirrors deleted on Gitlab for {proj_path}")
@@ -89,7 +90,8 @@ def delete_to_gitlab(gitlab_projects: list) -> None:
                 )
             else:
                 fg_print.error(
-                    f"Error deleting push mirror {mirror_name} on Forgejo for {proj_path}"
+                    f"Error deleting push mirror {mirror_name} on Forgejo for {proj_path}",
+                    f"Error deleting push mirror {mirror_name} on Forgejo for {proj_path}",
                 )
 
     session.close()
@@ -106,7 +108,8 @@ def to_forgejo(gitlab_projects: list) -> None:
             project.remote_mirrors.create({"url": proj_url, "enabled": True})
         except Exception as err:  # pylint: disable=broad-except
             fg_print.error(
-                f"Error setting push mirror on Gitlab for {proj_path}: {err}"
+                f"Error setting push mirror on Gitlab for {proj_path}: {err}",
+                f"Error setting push mirror on Gitlab for {proj_path}: {err}",
             )
         else:
             fg_print.info(f"Push mirror created on Gitlab for {proj_path}")
@@ -134,7 +137,10 @@ def to_gitlab(gitlab_projects: list) -> None:
         if response.ok:
             fg_print.info(f"Push mirror created on Gitlab for {proj_path}")
         else:
-            fg_print.error(f"Error setting push mirror on Forgejo for {proj_path}")
+            fg_print.error(
+                f"Error setting push mirror on Forgejo for {proj_path}",
+                f"Error setting push mirror on Forgejo for {proj_path}",
+            )
 
     session.close()
 
@@ -179,3 +185,5 @@ if __name__ == "__main__":
         fg_print.success("\nMigration finished with no errors!")
     else:
         fg_print.error(f"\nMigration finished with {ERR_COUNT} errors!")
+        print("Failed elements:")
+        print(*fg_print.GLOBAL_ERROR_LIST, sep="\n")
