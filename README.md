@@ -1,8 +1,6 @@
 # Gitlab to Forgejo migration script
 
-## --== WIP ==--
-
-**the scripts are currently undergoing testing**
+## Preamble
 
 This script uses the Gitlab API and a combination of [pyforgejo](https://codeberg.org/harabat/pyforgejo) and python `requests` to migrate all data from Gitlab to Forgejo.
 
