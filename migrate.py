@@ -67,6 +67,8 @@ if not os.path.exists(".migrate.ini"):
 
 config = configparser.RawConfigParser()
 config.read(".migrate.ini")
+GITLAB_CLIENT_AUTH_CERT = config.get("migrate", "gitlab_client_auth_cert")
+GITLAB_CLIENT_AUTH_KEY = config.get("migrate", "gitlab_client_auth_key")
 GITLAB_URL = config.get("migrate", "gitlab_url")
 GITLAB_TOKEN = config.get("migrate", "gitlab_token")
 GITLAB_ADMIN_USER = config.get("migrate", "gitlab_admin_user")
@@ -92,8 +94,14 @@ def main():
     print(f"Version: {SCRIPT_VERSION}")
     print()
 
+    session = requests.Session()
+    # add client authentication if cert and key are provided in the config
+    if(GITLAB_CLIENT_AUTH_CERT != "" and GITLAB_CLIENT_AUTH_KEY != ""):
+        cert_path = GITLAB_CLIENT_AUTH_CERT
+        key_path = GITLAB_CLIENT_AUTH_KEY
+        session.cert = (cert_path, key_path)
     # private token or personal token authentication
-    gl = gitlab.Gitlab(GITLAB_URL, private_token=GITLAB_TOKEN)
+    gl = gitlab.Gitlab(GITLAB_URL = GITLAB_URL, private_token=GITLAB_TOKEN, session=session)
     gl.auth()
     assert isinstance(gl.user, gitlab.v4.objects.CurrentUser)
     fg_print.info(f"Connected to Gitlab, version: {gl.version()[0]}")

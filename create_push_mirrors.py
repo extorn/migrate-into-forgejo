@@ -5,7 +5,7 @@
 Usage: create_push_mirrors.py [--to-forgejo] [--to-gitlab] [--all] [--limit LIMIT] (--create | --delete)
        create_push_mirrors.py --help
 
-Create push mirrrors from Gitlab to Forgejo and vicecersa.
+Create push mirrrors from Gitlab to Forgejo and viceversa.
 
 Options
   -h, --help     Show this screen
@@ -33,10 +33,14 @@ if not os.path.exists(".migrate.ini"):
 
 config = configparser.RawConfigParser()
 config.read(".migrate.ini")
+GITLAB_CLIENT_AUTH_CERT = config.get("migrate", "gitlab_client_auth_cert")
+GITLAB_CLIENT_AUTH_KEY = config.get("migrate", "gitlab_client_auth_key")
 GITLAB_URL = config.get("migrate", "gitlab_url")
 GITLAB_TOKEN = config.get("migrate", "gitlab_token")
 GITLAB_ADMIN_USER = config.get("migrate", "gitlab_admin_user")
 GITLAB_ADMIN_PASS = config.get("migrate", "gitlab_admin_pass")
+FORGEJO_CLIENT_AUTH_CERT = config.get("migrate", "forgejo_client_auth_cert")
+FORGEJO_CLIENT_AUTH_KEY = config.get("migrate", "forgejo_client_auth_key")
 FORGEJO_URL = config.get("migrate", "forgejo_url")
 FORGEJO_API_URL = f"{FORGEJO_URL}/api/v1"
 FORGEJO_HOST = FORGEJO_URL.split("/")[-1]
@@ -73,6 +77,11 @@ def delete_to_gitlab(gitlab_projects: list) -> None:
     """Delete push mirrors from Forgejo to Gitlab"""
     fg_print.info("\nDeleting push mirrors from Forgejo")
     session = requests.Session()
+    # add client authentication if cert and key are provided in the config
+    if(FORGEJO_CLIENT_AUTH_CERT != "" and FORGEJO_CLIENT_AUTH_KEY != ""):
+        cert_path = FORGEJO_CLIENT_AUTH_CERT
+        key_path = FORGEJO_CLIENT_AUTH_KEY
+        session.cert = (cert_path, key_path)
     session.auth = (FORGEJO_USER, FORGEJO_PASSWORD)
     for project in gitlab_projects:
         print(f"Project: {project.name_with_namespace}")
@@ -120,6 +129,11 @@ def to_gitlab(gitlab_projects: list) -> None:
     fg_print.info("\nMirroring repositories from Forgejo to Gitlab")
 
     session = requests.Session()
+    # add client authentication if cert and key are provided in the config
+    if(FORGEJO_CLIENT_AUTH_CERT != "" and FORGEJO_CLIENT_AUTH_KEY != ""):
+        cert_path = FORGEJO_CLIENT_AUTH_CERT
+        key_path = FORGEJO_CLIENT_AUTH_KEY
+        session.cert = (cert_path, key_path)
     session.auth = (FORGEJO_USER, FORGEJO_PASSWORD)
     # session.headers.update({"Authorization": FORGEJO_TOKEN})
 
@@ -149,7 +163,14 @@ if __name__ == "__main__":
     _args = docopt(__doc__)
     args = {k.replace("--", ""): v for k, v in _args.items()}
 
-    gl = gitlab.Gitlab(GITLAB_URL, private_token=GITLAB_TOKEN)
+    session = requests.Session()
+    # add client authentication if cert and key are provided in the config
+    if(GITLAB_CLIENT_AUTH_CERT != "" and GITLAB_CLIENT_AUTH_KEY != ""):
+        cert_path = GITLAB_CLIENT_AUTH_CERT
+        key_path = GITLAB_CLIENT_AUTH_KEY
+        session.cert = (cert_path, key_path)
+
+    gl = gitlab.Gitlab(GITLAB_URL, private_token=GITLAB_TOKEN, session=session)
     gl.auth()
     fg_print.info(f"Connected to Gitlab, version: {gl.version()[0]}")
     limit = args["limit"]
