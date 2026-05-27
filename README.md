@@ -39,12 +39,43 @@ You need to create a configuration file called `.migrate.ini` and store it in th
 
 ```ini
 [migrate]
-gitlab_url = https://gitlab.example.com
+# Add a Forgejo team for every possible gitlab group member access level
+#add_empty_teams_to_organizations=True <True / False>
+# Add all Forgejo organisation teams to the projects owned by it, not just those with current users 
+#add_empty_teams_to_projects=True <True / False>
+
+# If True, users found matching ^project_[0-9]{2}_bot_[a-zA-Z0-9]{32}$ or in list ignored_gitlab_system_users will NOT be imported, but generate a warning instead
+#ignore_gitlab_system_users=False <True / False>
+#ignored_gitlab_system_users="GitLab-Admin-Bot,ghost,support-bot,alert-bot,GitlabDuo"
+
+# When creating collaborators, are teams permitted to utilise the Forgejo nearest neighbor permission?
+#allow_fuzzy_teams=False
+# When creating collaborators, are users permitted to utilise the Forgejo nearest neighbor permission?
+#allow_fuzzy_users=False
+# If True, allow the closest lower permission defined Forgejo team to be used in lieu (lower have precedence over higher)
+#allow_fuzzy_auth_downgrade=False
+# If True, allow the closest higher permission defined Forgejo team to be used in lieu (lower have precedence over higher)
+#allow_fuzzy_auth_upgrade=False
+
+# Overrides for organization team names (for their gitlab equivalent)
+#org_team_name_maintainers=Maintainers
+#org_team_name_developers=Developers
+#org_team_name_reporters=Reporters
+#org_team_name_guests=Guests
+# Overrides for organization team descriptions
+#org_team_name_owners_description=Owners
+#org_team_name_maintainers_description=Maintainers
+#org_team_name_developers_description=Developers
+#org_team_name_reporters_description=Reporters
+#org_team_name_guests_description=Guests
+
+# Gitlab website url
+gitlab_url = https://gitlab.example.com <http[s]://hostname[:port][/path]>
 # Either a Gitlab token OR admin user and password are required for migrate, but push mirrors requires user and password at present
 gitlab_token = <your-gitlab-token>
 gitlab_admin_user = <gitlab-admin-user>
 gitlab_admin_pass = <your-gitlab-password>
-gitlab_sync_connection_type = <ssh/https>
+#gitlab_sync_connection_type = https <ssh/https>
 
 forgejo_url = https://forgejo.example.com
 # Either a Forgejo token OR admin user and password are required for migrate, but push mirrors requires user and password at present
