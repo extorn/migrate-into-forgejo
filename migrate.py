@@ -1216,13 +1216,16 @@ def _run_inbuilt_repo_import(fg_api: pyforgejo.PyforgejoApi, project: gitlab.v4.
     forgejo_owner = _get_forgejo_owner_for_gitlab_project(fg_api=fg_api, project=project)
     
     forgejo_owner_name : str
+    forgejo_owner_id : int
     if forgejo_owner is None:
         fg_print.error(f"Failed to determine project owner for project {project.name}, skipping import!")
         return
     elif isinstance(forgejo_owner, Organization):
         forgejo_owner_name = forgejo_owner.username
+        forgejo_owner_id = forgejo_owner.id
     elif isinstance(forgejo_owner, User):
         forgejo_owner_name = forgejo_owner.login
+        forgejo_owner_id = forgejo_owner.id
 
 
     if not _forgejo_repo_exists(fg_api=fg_api, owner=forgejo_owner_name, repo=forgejo_safe_project_name):
@@ -1257,7 +1260,7 @@ def _run_inbuilt_repo_import(fg_api: pyforgejo.PyforgejoApi, project: gitlab.v4.
                                             releases=True,
                                             private=private,
                                             repo_name=forgejo_safe_project_name,
-                                            uid=owner_uid,
+                                            uid=forgejo_owner_id,
                                             wiki=True,
                                     )
                 fg_print.info(f"Project {forgejo_safe_project_name} imported {clone_url}!")
@@ -1318,11 +1321,12 @@ def _import_project_members(
         # owner is an organization
         user_teams = _get_forgejo_teams(fg_api=fg_api, orgname=forgejo_owner_name)
         existing_repo_teams = _forgejo_list_team_in_repository(fg_api=fg_api, owner=forgejo_owner_name, repo_name=forgejo_safe_project_name)
+        existing_repo_team_ids = {team.id for team in existing_repo_teams}
         all_forgejo_teams_members_usernames : set[str] = set()
         is_might_need_to_add_some_users_direct = not (IS_FUZZY_TEAMS_ALLOWED)
         for team in user_teams:
             add_team_to_repo = False
-            if team in existing_repo_teams:
+            if team.id in existing_repo_team_ids:
                 fg_print.info(f"Skipping team {team.name}, already attached to repository {forgejo_safe_project_name}")
             else:
                 if ADD_EMPTY_TEAMS_AS_COLLABORATORS:
