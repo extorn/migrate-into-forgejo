@@ -17,15 +17,14 @@ Options
   --all       migrate all
   --notify    send notification to users
 """
-from copy import copy, deepcopy
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 import os
-import json
 import re
 import random
 import string
 import configparser
-from typing import Dict, TypedDict
+from typing import Dict
 from typing import List
 import typing
 from pyforgejo.core import RequestOptions

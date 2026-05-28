@@ -107,6 +107,7 @@ Changes:
 * I've updated this script to use the new API for forgejo (2.0+).
 * I tried to make minimal changes initially, but in the end, I have refactored a bit, but the program flow remains intentionally identical. It would be fairy easy to refactor this further in to a series of classes, allowing future addition of any source system of your choice.
 * Added support for user GPG key import, though don't use these myself.
+* Added support for creating Organization Teams and Collaborators to match Gitlab users based on gitlab access level.
 
 Note:
 * I have added warnings where users are found that I think are likely to be gitlab system users. They are imported anyway, just in case, but you're made aware.
