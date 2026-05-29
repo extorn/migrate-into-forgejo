@@ -41,8 +41,8 @@ You need to create a configuration file called `.migrate.ini` and store it in th
 [migrate]
 # Add a Forgejo team for every possible gitlab group member access level
 #add_empty_teams_to_organizations=True <True / False>
-# Add all Forgejo organisation teams to the projects owned by it, not just those with current users 
-#add_empty_teams_to_projects=True <True / False>
+# Add all Forgejo organisation teams to the repos owned by it, not just those with current users 
+#add_empty_teams_to_repos=True <True / False>
 
 # If True, users found matching ^project_[0-9]{2}_bot_[a-zA-Z0-9]{32}$ or in list ignored_gitlab_system_users will NOT be imported, but generate a warning instead
 #ignore_gitlab_system_users=False <True / False>
