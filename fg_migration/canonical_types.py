@@ -5,7 +5,15 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List
 
+
+
 from fg_migration.utils import name_clean
+
+# Note: I created these types to make it explict what fields are currently being handled by the migration
+#       In theory we could either use the Forgejo types directly, or extend them e.g. class CanonicalUser(pyforgejo.User)
+#       BUT, the issue is that you'll lose the ability to see what is and isn't happening as it won't be explicit.
+#       Possibly I might change this to extend the core types, if we get most fields migrated, but, it helps to know 
+#       where an object has come from and that is obvious when seeing the type is Canonical<ForgejoTypeName>
 
 
 @dataclass
@@ -18,6 +26,7 @@ class CanonicalUser:
     def get_safe_username(self) -> str:
         return name_clean(self.username)
 
+
 @dataclass
 class CanonicalGpgKey:
     name:str
@@ -28,6 +37,7 @@ class CanonicalGpgKey:
         self.name = name
         self.armored_public_key = armored_public_key
         self.armored_signature = armored_signature
+
 
 @dataclass
 class CanonicalKey:
@@ -40,7 +50,7 @@ class CanonicalKey:
 
 @dataclass
 class CanonicalSystemUser:
-    source_system:str
+    source_system:str # e.g. gitlab
     username: str
     full_name: str
     email: str
@@ -60,7 +70,7 @@ class CanonicalSystemUser:
 
 @dataclass
 class CanonicalOrganizations:
-    source_type:str
+    source_type:str # what is this type defined as at source e.g. for gitlab, Groups
     members:List[CanonicalOrganization]
 
     def __init__(self, source_type:str, members:List[CanonicalOrganization]):
@@ -69,7 +79,7 @@ class CanonicalOrganizations:
 
 @dataclass
 class CanonicalOrganization:
-    source_type:str
+    source_type:str # what is this type defined as at source e.g. for gitlab, Group
     username: str
     full_name:str
     description:str
@@ -88,7 +98,7 @@ class CanonicalOrganization:
 @dataclass
 class CanonicalTeam:
     #username: str
-    source_access_level:str
+    source_access_level:str # what is the access level defined in the source system for this team
     users:List[CanonicalUser]
 
     def __init__(self, username:str, source_access_level:str, users:List[CanonicalUser]):
@@ -110,8 +120,8 @@ class CanonicalRepoAccessor:
 @dataclass
 class CanonicalRepoAccessors:
     members:List[CanonicalRepoAccessor]
-    source_system:str
-    source_type:str
+    source_system:str # e.g. gitlab
+    source_type:str # what is this type defined as at source e.g. for gitlab, Users
     def __init__(self, source_system:str, members=List[CanonicalRepoAccessor], source_type="Users"):
         self.members = members
         self.source_type = source_type
@@ -138,9 +148,9 @@ class CanonicalRepo:
     auth_password:str
     auth_username:str
     auth_token:str
-    source_system:str
-    source_id:str
-    source_type: str # what is this called in the source system
+    source_system:str # e.g. gitlab
+    source_id:str # the UUID for this object in the source system e.g. gitlab
+    source_type: str # what is this type defined as at source e.g. for gitlab, Project
 
     def __init__(self, 
                  source_system:str,

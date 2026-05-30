@@ -22,8 +22,7 @@ class Migrator:
         self.migration_config = migration_config
         self.migration_source = migration_source
     
-    #TODO reenable this code and update it to work
-        
+    #TODO reenable this code and update it to work (it isn't strictly required, but someone may find it useful to customise what happens normally in the auto-migrate)        
 
     # def _import_project_labels(
     #     fg_api: ForgejoMigrator,

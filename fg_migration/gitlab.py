@@ -18,14 +18,7 @@ class GitlabMigrationSource(MigrationSource):
     gitlab_migration_config: GitlabMigrationConfig
     source_system: str = "Gitlab"
 
-    access_level_role_map : dict[int,CanonicalRepositoryRole] = {
-        50:CanonicalRepositoryRole.OWNER,
-        40:CanonicalRepositoryRole.MAINTAINER,
-        30:CanonicalRepositoryRole.DEVELOPER,
-        20:CanonicalRepositoryRole.REPORTER,
-        10:CanonicalRepositoryRole.GUEST
-    }
-    
+    access_level_role_map : dict[int,CanonicalRepositoryRole|str]
 
     def __init__(self, 
                  gitlab_api:gitlab.Gitlab,
@@ -34,6 +27,25 @@ class GitlabMigrationSource(MigrationSource):
         self.gitlab_api = gitlab_api
         self.gitlab_config = gitlab_config
         self.gitlab_migration_config = gitlab_migration_config
+        self._build_access_role_map()
+
+    def _build_access_role_map(self):
+        """Ensure that every possible Forgejo role is mapped to a respective GitLab access level"""
+        access_level_role_map = {}
+        for role in CanonicalRepositoryRole:
+            match role:
+                case CanonicalRepositoryRole.OWNER:
+                    access_level_role_map[50] = role
+                case CanonicalRepositoryRole.MAINTAINER:
+                    access_level_role_map[40] = role
+                case CanonicalRepositoryRole.DEVELOPER:
+                    access_level_role_map[30] = role
+                case CanonicalRepositoryRole.REPORTER:
+                    access_level_role_map[20] = role
+                case CanonicalRepositoryRole.GUEST:
+                    access_level_role_map[10] = role
+                case _:
+                    raise Exception(f"No Forgejo Role mapping for {role} to Gitlab access level")
 
     def _get_is_individual(self, project : gitlab.v4.objects.Project) -> bool:
         namespace_kind = project.namespace.get("kind")
@@ -223,11 +235,14 @@ class GitlabMigrationSource(MigrationSource):
 
     @override
     def get_repository_role(self, source_access_level:str) -> CanonicalRepositoryRole | str:
-        role = self.access_level_role_map.get(int(source_access_level))
+        """Get a predefined CanonicalRepositoryRole or give a unique string to identify a role type that should be used for this access level"""
+        gitlab_access_level : int = int(source_access_level)
+        role = self.access_level_role_map.get(gitlab_access_level)
         if role is None:
             fg_print.error(f"{self.source_system} Access_Level:Role Mapping missing for {source_access_level}")
             role = f"{self.source_system}_{source_access_level}"
-            fg_print.info(f"Created new {self.source_system} role : {role}")
+            fg_print.info(f"Created new {self.source_system} role type : {role}")
+            self.access_level_role_map[gitlab_access_level] = role
         return role
 
 
@@ -235,7 +250,9 @@ class GitlabMigrationSource(MigrationSource):
     def get_nearest_repository_role(self, source_access_level:str,
                                  allow_downgrade:bool,
                                  allow_upgrade:bool) -> CanonicalRepositoryRole | None:
-
+        """Used when a new role type has had to be created.
+           Get the closest defined role for this access level following the rules.
+           The result willl be assigned to be used whenever the custom role type is used"""
         access_level_int = int(source_access_level)
         known_access_levels = sorted(self.access_level_role_map.keys())
         closest_access_level: int | None = None
