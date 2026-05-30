@@ -109,8 +109,11 @@ gitlab_admin_pass = <your-gitlab-password>
 ### If an organization team exists matching the role of a user being imported:
 ### False: the original team will be renamed with suffix _old
 ### True: the users will be added to the existing team
-### Note, that team (including existing users will gain repository access)
+### Notes:
+###  1. that team (including existing users will gain repository access)
+###  2. OWNER Role teams cannot be renamed out of the way (you'll get warning if there are existing users in an OWNER Role team for the Organization)
 ### use_existing_teams=False
+
 ### When creating collaborators, are teams permitted to utilise the Forgejo nearest neighbor permission?
 #allow_fuzzy_teams=False
 

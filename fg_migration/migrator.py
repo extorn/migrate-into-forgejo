@@ -502,7 +502,17 @@ class Migrator:
                 # get a list of existing users and warn that they will get extra access to what they currently do.
                 # if the imported team matching theirs has access to new repositories, they will be granted that access too.
                 existing_users = set(self.fg_api.get_forgejo_team_members(matched_team))
-                fg_print.warning(f"Pre-existing team users will be granted access to new repositories that are created with access granted to this team. Affected Forgejo Team {matched_team.name}, usernames: {existing_users}")
+                if len(existing_users) > 0:
+                    if self.migration_config.USE_EXISTING_TEAMS:
+                        fg_print.warning(f"Pre-existing team users will be granted access to new repositories that are created with access granted to this team. Affected Forgejo Team {matched_team.name}, usernames: {existing_users}")
+                    else:
+                        # Rename existing Team out of the way.
+                        team_definition = ForgejoTeamDefinition.fromTeam(matched_team)
+                        if team_definition.permissions.role == CanonicalRepositoryRole.OWNER:
+                            fg_print.warning(f"Pre-existing team users will be granted access to new repositories that are created with access granted to this team. Affected Forgejo Team {matched_team.name}, usernames: {existing_users}")
+                        else:
+                            team_definition.name += "_old"
+                            self.fg_api.forgejo_update_organization_team(team=matched_team, definition=team_definition)
 
             # A set in case we can alter Owner group name in future or Forgejo is updated to create other teams automatically with an Organization
             matching_forgejo_teams = {}
@@ -518,9 +528,11 @@ class Migrator:
             if matched_team is not None:
                 matching_forgejo_teams.append(matched_team)
             
+            added_new_team:bool = False
             if len(matching_forgejo_teams) == 0:
-                # No matching team found, lets create one
+                # No matching team found, lets create one                
                 forgejo_team = self.fg_api.forgejo_add_organization_team(org_name=organization.get_safe_username(), definition=forgejo_team_definition)
+                added_new_team = True
                 if forgejo_team is None:
                     fg_print.warning(f"Forgejo Team {forgejo_team_definition.name} not available, skipping!")
                     # Unable to add users to this team, continue with next iteration of for loop.
@@ -543,8 +555,13 @@ class Migrator:
                 forgejo_team = self.fg_api.forgejo_update_organization_team(team=forgejo_team, definition=forgejo_team_definition)
             
             # Add all matching users to this team
-            #TODO reliable check needed 
-            existing_member_names = {member.login
+
+            existing_member_names : set[str]
+            if added_new_team:
+                # we already know there are no members, we only just created it. No need to call the API.
+                existing_member_names = {}
+            else:
+                existing_member_names = {member.login
                                      for member in self.fg_api.get_forgejo_team_members(team=forgejo_team)
                                      if member.login is not None}
 
@@ -560,7 +577,16 @@ class Migrator:
                 else:
                     fg_print.error(f"Failed to import {self.migration_source.getSourceSystemName()} user {canonical_user.username} permissions in {organization.source_type} {organization.name}",
                                     f"Failed to import {self.migration_source.getSourceSystemName()} user {canonical_user.username} permissions in {organization.source_type} {organization.name}")
+        
+        # Now create any missing empty teams if desired
+        if self.migration_config.ADD_EMPTY_TEAMS:
+            for role in CanonicalRepositoryRole:
+                if not self.fg_api.team_definitions[role].name in existing_forgejo_teams.keys():
+                    forgejo_team_definition = self.fg_api.team_definitions[role]
+                    fg_print.info(f"Adding empty Team {forgejo_team_definition.name} to Organization {organization.get_safe_username()}")
+                    forgejo_team = self.fg_api.forgejo_add_organization_team(org_name=organization.get_safe_username(), definition=forgejo_team_definition)
 
+        
 
 
     def import_users(self, notify=False):
