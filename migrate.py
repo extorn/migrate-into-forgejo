@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 #
 # imports projects, users, groups, issues, labels, milestones, keys
-# and collaborators from Gitlab to Forgejo
+# and collaborators from GitLab to Forgejo
 #
 """
 Usage: migrate.py [--users] [--groups] [--projects] [--all] [--notify]
        migrate.py --help
 
-Migration script to import projects, users, groups, from Gitlab to Forgejo.
+Migration script to import projects, users, groups, from GitLab to Forgejo.
 
 Options
   -h, --help  Show this screen
@@ -32,9 +32,9 @@ import pyforgejo  # pip install pyforgejo (https://github.com/h44z/pyforgejo)
 from pyforgejo import PyforgejoApi
 
 from fg_migration.canonical_types import MigrationSource
-from fg_migration.config_types import ForgejoConfig, ForgejoMigrationConfig, GitlabConfig, GitlabMigrationConfig, MigrationConfig
+from fg_migration.config_types import ForgejoConfig, ForgejoMigrationConfig, GitLabConfig, GitLabMigrationConfig, MigrationConfig
 from fg_migration.forgjo import ForgejoMigrator
-from fg_migration.gitlab import GitlabMigrationSource
+from fg_migration.gitlab import GitLabMigrationSource
 from fg_migration.migrator import Migrator
 
 from fg_migration import fg_print
@@ -55,8 +55,8 @@ config.read(".migrate.ini")
 migration_config = MigrationConfig(config=config)
 forgejo_config = ForgejoConfig(config=config)
 migration_config_forgejo = ForgejoMigrationConfig(config=config)
-gitlab_config = GitlabConfig(config=config)
-migration_config_gitlab = GitlabMigrationConfig(config=config)
+gitlab_config = GitLabConfig(config=config)
+migration_config_gitlab = GitLabMigrationConfig(config=config)
 
 #######################
 # CONFIG SECTION END
@@ -69,7 +69,7 @@ def main():
     args = {k.replace("--", ""): v for k, v in _args.items()}
 
     fg_print.print_color(
-        fg_print.Bcolors.HEADER, "---=== Gitlab to Forgejo migration ===---"
+        fg_print.Bcolors.HEADER, "---=== GitLab to Forgejo migration ===---"
     )
     fg_print.info(f"Version: {SCRIPT_VERSION}\n")
     
@@ -81,17 +81,17 @@ def main():
         key_path = gitlab_config.GITLAB_CLIENT_AUTH_KEY
         session.cert = (cert_path, key_path)
     # private token or personal token authentication
-    gl = gitlab.Gitlab(url = gitlab_config.GITLAB_URL, private_token=gitlab_config.GITLAB_TOKEN, session=session)
+    gl = gitlab.GitLab(url = gitlab_config.GITLAB_URL, private_token=gitlab_config.GITLAB_TOKEN, session=session)
     try:
         gl.auth()
-    except gitlab.GitlabAuthenticationError:
-        fg_print.error("Failed to authenticate with Gitlab! Check access token and client authentication settings in .migrate.ini")
+    except gitlab.GitLabAuthenticationError:
+        fg_print.error("Failed to authenticate with GitLab! Check access token and client authentication settings in .migrate.ini")
         os.sys.exit()
     except Exception as e:
-        fg_print.error(f"Failed to connect to Gitlab! {e}")
+        fg_print.error(f"Failed to connect to GitLab! {e}")
         os.sys.exit()
     assert isinstance(gl.user, gitlab.v4.objects.CurrentUser)
-    fg_print.info(f"Connected to Gitlab, version: {gl.version()[0]}")
+    fg_print.info(f"Connected to GitLab, version: {gl.version()[0]}")
 
     fg = _build_forgejo_api_client(forgejo_config)
     try:
@@ -104,7 +104,7 @@ def main():
     
     fg_print.info(f"Connected to Forgejo, version: {fg_ver}")
 
-    migration_source : MigrationSource = GitlabMigrationSource(gitlab_api=gl, gitlab_config=gitlab_config)
+    migration_source : MigrationSource = GitLabMigrationSource(gitlab_api=gl, gitlab_config=gitlab_config)
 
     migrator = Migrator(migration_config=migration_config, migration_source=migration_source, fg_api=ForgejoMigrator(fg_api=fg))
 

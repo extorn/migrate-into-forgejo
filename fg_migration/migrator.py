@@ -105,9 +105,9 @@ class Migrator:
     #             for tmp_assignee in issue.assignees:
     #                 assignees.append(name_clean(tmp_assignee["username"]))
 
-    #             # Get milestone id for the issue, if milestone is assigned to the issue in Gitlab.
+    #             # Get milestone id for the issue, if milestone is assigned to the issue in GitLab.
     #             # # We need to get the milestone id for the milestone title from Forgejo, because the 
-    #             # milestone id in Gitlab is not the same as the milestone id in Forgejo, and we need 
+    #             # milestone id in GitLab is not the same as the milestone id in Forgejo, and we need 
     #             # the milestone id for the assignment of the milestone to the issue in Forgejo. 
     #             # If there is no milestone with the same title in Forgejo, we do not assign a milestone 
     #             # to the issue in Forgejo, because there is no equivalent milestone in Forgejo.
@@ -117,7 +117,7 @@ class Migrator:
     #                 forgejo_milestoneId = fg_api.find_forgejo_milestone_id_by_title(forgejo_milestones, issue.milestone["title"]) # N.b. gitlab issue so dict
     #                 if forgejo_milestoneId is None:
     #                     # if this happens, something went wrong with the milestone import, because the milestone assigned 
-    #                     # to the issue in Gitlab should have been imported to Forgejo in the milestone import step before 
+    #                     # to the issue in GitLab should have been imported to Forgejo in the milestone import step before 
     #                     # the issue import step, so we print an error and skip the milestone assignment for this issue, 
     #                     # but we continue with the import of the issue without the milestone assignment, because the 
     #                     # existence of the milestone is not a failure for the import of the issue, we just skip the 

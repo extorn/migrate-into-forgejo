@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 @dataclass
 class MigrationConfig:
+    USE_EXISTING_TEAMS:bool
     ADD_EMPTY_TEAMS:bool
     ADD_EMPTY_TEAMS_TO_REPOS:bool
     IS_FUZZY_TEAMS_ALLOWED:bool
@@ -13,6 +14,8 @@ class MigrationConfig:
     ALLOW_FUZZY_AUTH_UPGRADE:bool
 
     def __init__(self, config:configparser.RawConfigParser, section:str = "migrate"):
+        self.USE_EXISTING_TEAMS = config.getboolean(section, "use_existing_teams", fallback=False)
+        self.ADD_EMPTY_TEAMS = config.getboolean(section, "add_empty_teams_to_organizations", fallback=False)
         self.ADD_EMPTY_TEAMS = config.getboolean(section, "add_empty_teams_to_organizations", fallback=False)
         self.ADD_EMPTY_TEAMS_TO_REPOS = config.getboolean(section, "add_empty_teams_to_repos", fallback=False)
         self.IS_FUZZY_TEAMS_ALLOWED = config.getboolean(section, "allow_fuzzy_teams", fallback=False)
@@ -71,7 +74,7 @@ class ForgejoMigrationConfig:
         self.ORG_TEAM_GUESTS_DESCRIPTION = config.get(section, "org_team_guests_description", fallback=self.ORG_TEAM_GUESTS_DESCRIPTION)
 
 @dataclass
-class GitlabConfig:
+class GitLabConfig:
     GITLAB_CLIENT_AUTH_CERT : str | None
     GITLAB_CLIENT_AUTH_KEY : str | None
     GITLAB_URL : str
@@ -88,7 +91,7 @@ class GitlabConfig:
         self.GITLAB_ADMIN_PASS = config.get(section, "gitlab_admin_pass", fallback=None)
 
 @dataclass
-class GitlabMigrationConfig:
+class GitLabMigrationConfig:
     IGNORE_GITLAB_SYSTEM_USERS : bool
     IGNORED_GITLAB_SYSTEM_USERS : set[str]
 

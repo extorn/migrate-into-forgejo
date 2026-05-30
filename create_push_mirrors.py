@@ -5,12 +5,12 @@
 Usage: create_push_mirrors.py [--to-forgejo] [--to-gitlab] [--all] [--limit LIMIT] (--create | --delete)
        create_push_mirrors.py --help
 
-Create push mirrors from Gitlab to Forgejo and vice versa.
+Create push mirrors from GitLab to Forgejo and vice versa.
 
 Options
   -h, --help     Show this screen
-  --to-forgejo   create mirrors from Gitlab to Forgejo
-  --to-gitlab    create mirrors from Forgejo to Gitlab
+  --to-forgejo   create mirrors from GitLab to Forgejo
+  --to-gitlab    create mirrors from Forgejo to GitLab
   --all          create mirrors in both directions
   --limit LIMIT  limit number of projects [default: 100000]
   --create       create mirrors
@@ -202,9 +202,9 @@ def _delete_forgejo_push_mirror(
 def to_forgejo(
     gitlab_projects: List[gitlab.v4.objects.Project],
 ) -> None:
-    """Create push mirrors from Gitlab to Forgejo"""
+    """Create push mirrors from GitLab to Forgejo"""
 
-    fg_print.info("\nMirroring repositories from Gitlab to Forgejo")
+    fg_print.info("\nMirroring repositories from GitLab to Forgejo")
 
     for project in gitlab_projects:
         proj_path = project.path_with_namespace
@@ -227,16 +227,16 @@ def to_forgejo(
             )
 
             fg_print.info(
-                f"Push mirror created on Gitlab for {proj_path}"
+                f"Push mirror created on GitLab for {proj_path}"
             )
 
         except Exception as e:
             detail = str(e)
 
             fg_print.error(
-                f"Error creating push mirror on Gitlab "
+                f"Error creating push mirror on GitLab "
                 f"for {proj_path}: {detail}",
-                f"Error creating push mirror on Gitlab "
+                f"Error creating push mirror on GitLab "
                 f"for {proj_path}: {detail}",
             )
 
@@ -244,9 +244,9 @@ def to_forgejo(
 def delete_to_forgejo(
     gitlab_projects: List[gitlab.v4.objects.Project],
 ) -> None:
-    """Delete push mirrors from Gitlab to Forgejo"""
+    """Delete push mirrors from GitLab to Forgejo"""
 
-    fg_print.info("\nDeleting push mirrors from Gitlab")
+    fg_print.info("\nDeleting push mirrors from GitLab")
 
     for project in gitlab_projects:
         proj_path = project.path_with_namespace
@@ -260,16 +260,16 @@ def delete_to_forgejo(
                 project.remote_mirrors.delete(mirror.id)
 
                 fg_print.info(
-                    f"Push mirror deleted on Gitlab for {proj_path}"
+                    f"Push mirror deleted on GitLab for {proj_path}"
                 )
 
         except Exception as e:
             detail = str(e)
 
             fg_print.error(
-                f"Error deleting push mirrors on Gitlab "
+                f"Error deleting push mirrors on GitLab "
                 f"for {proj_path}: {detail}",
-                f"Error deleting push mirrors on Gitlab "
+                f"Error deleting push mirrors on GitLab "
                 f"for {proj_path}: {detail}",
             )
 
@@ -278,9 +278,9 @@ def to_gitlab(
     fg_api: PyforgejoApi,
     gitlab_projects: List[gitlab.v4.objects.Project],
 ) -> None:
-    """Create push mirrors from Forgejo to Gitlab"""
+    """Create push mirrors from Forgejo to GitLab"""
 
-    fg_print.info("\nMirroring repositories from Forgejo to Gitlab")
+    fg_print.info("\nMirroring repositories from Forgejo to GitLab")
 
     for project in gitlab_projects:
         proj_path = project.path_with_namespace
@@ -320,7 +320,7 @@ def delete_to_gitlab(
     fg_api: PyforgejoApi,
     gitlab_projects: List[gitlab.v4.objects.Project],
 ) -> None:
-    """Delete push mirrors from Forgejo to Gitlab"""
+    """Delete push mirrors from Forgejo to GitLab"""
 
     fg_print.info("\nDeleting push mirrors from Forgejo")
 
@@ -367,7 +367,7 @@ def main():
 
     fg_print.print_color(
         fg_print.Bcolors.HEADER,
-        "---=== Gitlab <-> Forgejo Push Mirror Management ===---",
+        "---=== GitLab <-> Forgejo Push Mirror Management ===---",
     )
 
     fg_print.info(f"Version: {SCRIPT_VERSION}\n")
@@ -398,12 +398,12 @@ def main():
 
     except gitlab.GitlabAuthenticationError:
         fg_print.error(
-            "Failed to authenticate with Gitlab!"
+            "Failed to authenticate with GitLab!"
         )
         os.sys.exit()
 
     fg_print.info(
-        f"Connected to Gitlab, version: {gl.version()[0]}"
+        f"Connected to GitLab, version: {gl.version()[0]}"
     )
 
     #

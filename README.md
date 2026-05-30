@@ -1,4 +1,4 @@
-# Gitlab to Forgejo migration script
+# GitLab to Forgejo migration script
 
 # **WARNING:**
 
@@ -14,7 +14,7 @@ Notes
 
 ## Preamble
 
-This script uses the Gitlab API and a combination of [pyforgejo](https://codeberg.org/harabat/pyforgejo) and python `requests` to migrate all data from Gitlab to Forgejo.
+This script uses the GitLab API and a combination of [pyforgejo](https://codeberg.org/harabat/pyforgejo) and python `requests` to migrate all data from GitLab to Forgejo.
 
 This script supports migration of:
 
@@ -23,7 +23,7 @@ This script supports migration of:
 *   Groups
 *   Public SSH keys
 
-Tested with Gitlab Version 17.2.1 and Forgejo Version 8.0.0
+Tested with GitLab Version 17.2.1 and Forgejo Version 8.0.0
 
 ## Usage
 
@@ -51,62 +51,104 @@ You need to create a configuration file called `.migrate.ini` and store it in th
 :bulb: `.migrate.ini` is listed in `.gitignore`.
 
 ```
+###
+### These are the settings controlling the migration process from
+### a source system such as GitLab into Forgejo
+###
+### Use:
+###
+### 1. Default values are shown in commented out options
+### 2. Any settings NOT commented out MUST be set to match your requirements
+### 3. <...> is used to give a clue as to value e.g. <True|False>
+### 4. Comments on the same line as a configuration option are not supported
+###    e.g.
+###    input -> my_setting=some_value # A comment
+###    read as -> my_setting="some_value # A comment"
+[forgejo]
+
+forgejo_url = https://forgejo.example.com
+### Either a Forgejo token OR admin user and password are required for migrate, but push mirrors requires user and password at present
+forgejo_token = <your-forgejo-token>
+forgejo_admin_user = <forgejo-admin-user>
+forgejo_admin_pass = <your-forgejo-password>
+
+
+### if your forgejo instance requires client authentication, provide the paths to the cert and key files below.
+### If forgejo_client_auth_cert is provided, client authentication is switched on
+#forgejo_client_auth_cert = /path/to/forgejo_client_auth_cert.pem
+#forgejo_client_auth_key = /path/to/forgejo_client_auth_key.pem
+
+[gitlab]
+
+# GitLab website url
+gitlab_url = https://gitlab.example.com <http[s]://hostname[:port][/path]>
+### Either a GitLab token OR admin user and password are required for migrate, but push mirrors requires user and password at present
+gitlab_token = <your-gitlab-token>
+gitlab_admin_user = <gitlab-admin-user>
+gitlab_admin_pass = <your-gitlab-password>
+### Which protocol should git connect to gitlab using?
+#gitlab_sync_connection_type = https <ssh/https>
+
+
+
+### If your gitlab instance requires client authentication, 
+### uncomment these parameters, and provide the appropriate paths
+### If gitlab_client_auth_cert is provided, client authentication is switched on
+#gitlab_client_auth_cert = /path/to/gitlab_client_auth_cert.pem
+#gitlab_client_auth_key = /path/to/gitlab_client_auth_key.pem
+
+
 [migrate]
-# Add a Forgejo team for every possible gitlab group member access level
+
+### Add a Forgejo team for every possible gitlab group member access level
 #add_empty_teams_to_organizations=True <True / False>
-# Add all Forgejo organisation teams to the repos owned by it, not just those with current users 
+
+### Add all Forgejo organisation teams to the repos owned by it, not just those with current users 
 #add_empty_teams_to_repos=True <True / False>
 
-# If True, users found matching ^project_[0-9]{2}_bot_[a-zA-Z0-9]{32}$ or in list ignored_gitlab_system_users will NOT be imported, but generate a warning instead
-#ignore_gitlab_system_users=False <True / False>
-#ignored_gitlab_system_users="GitLab-Admin-Bot,ghost,support-bot,alert-bot,GitlabDuo"
-
-# When creating collaborators, are teams permitted to utilise the Forgejo nearest neighbor permission?
+### If an organization team exists matching the role of a user being imported:
+### False: the original team will be renamed with suffix _old
+### True: the users will be added to the existing team
+### Note, that team (including existing users will gain repository access)
+### use_existing_teams=False
+### When creating collaborators, are teams permitted to utilise the Forgejo nearest neighbor permission?
 #allow_fuzzy_teams=False
-# When creating collaborators, are users permitted to utilise the Forgejo nearest neighbor permission?
+
+### When creating collaborators, are users permitted to utilise the Forgejo nearest neighbor permission?
 #allow_fuzzy_users=False
-# If True, allow the closest lower permission defined Forgejo team to be used in lieu (lower have precedence over higher)
+
+### If True, allow the closest lower permission defined Forgejo team to be used in lieu (lower have precedence over higher)
 #allow_fuzzy_auth_downgrade=False
-# If True, allow the closest higher permission defined Forgejo team to be used in lieu (lower have precedence over higher)
+
+### If True, allow the closest higher permission defined Forgejo team to be used in lieu (lower have precedence over higher)
 #allow_fuzzy_auth_upgrade=False
 
-# Overrides for organization team names (for their gitlab equivalent)
+
+
+[migrate.forgejo]
+
+### Overrides for organization team names (for their gitlab equivalent)
 #org_team_maintainers_name=Maintainers
 #org_team_developers_name=Developers
 #org_team_reporters_name=Reporters
 #org_team_guests_name=Guests
-# Overrides for organization team descriptions
+
+### Overrides for organization team descriptions
 #org_team_owners_description=Owners
 #org_team_maintainers_description=Maintainers
 #org_team_developers_description=Developers
 #org_team_reporters_description=Reporters
 #org_team_guests_description=Guests
 
-# Gitlab website url
-gitlab_url = https://gitlab.example.com <http[s]://hostname[:port][/path]>
-# Either a Gitlab token OR admin user and password are required for migrate, but push mirrors requires user and password at present
-gitlab_token = <your-gitlab-token>
-gitlab_admin_user = <gitlab-admin-user>
-gitlab_admin_pass = <your-gitlab-password>
-#gitlab_sync_connection_type = https <ssh/https>
-
-forgejo_url = https://forgejo.example.com
-# Either a Forgejo token OR admin user and password are required for migrate, but push mirrors requires user and password at present
-forgejo_token = <your-forgejo-token>
-forgejo_admin_user = <forgejo-admin-user>
-forgejo_admin_pass = <your-forgejo-password>
 
 
-# if your forgejo instance requires client authentication, provide the paths to the cert and key files below
-# If forgejo_client_auth_cert is provided, client authentication is switched on
-#forgejo_client_auth_cert = /path/to/forgejo_client_auth_cert.pem
-#forgejo_client_auth_key = /path/to/forgejo_client_auth_key.pem
+[migrate.gitlab]
 
-# If your gitlab instance requires client authentication, 
-# uncomment these parameters, and provide the appropriate paths
-# If gitlab_client_auth_cert is provided, client authentication is switched on
-#gitlab_client_auth_cert = /path/to/gitlab_client_auth_cert.pem
-#gitlab_client_auth_key = /path/to/gitlab_client_auth_key.pem
+### If True, users found matching ^project_[0-9]{2}_bot_[a-zA-Z0-9]{32}$ or in list ignored_gitlab_system_users will NOT be imported, but generate a warning instead
+#ignore_gitlab_system_users=False <True / False>
+
+### All exact matches on this list will not be imported (if ignore_gitlab_system_users=True)
+#ignored_gitlab_system_users="GitLab-Admin-Bot,ghost,support-bot,alert-bot,GitLabDuo"
 ```
 
 ### Credits and fork information
@@ -121,7 +163,7 @@ Changes:
 *   I've updated this script to use the new API for forgejo (2.0+).
 *   I tried to make minimal changes initially, but in the end, I have refactored a bit, but the program flow remains intentionally identical. It would be fairy easy to refactor this further in to a series of classes, allowing future addition of any source system of your choice.
 *   Added support for user GPG key import, though don't use these myself.
-*   Added support for creating Organization Teams and Collaborators to match Gitlab users based on gitlab access level.
+*   Added support for creating Organization Teams and Collaborators to match GitLab users based on gitlab access level.
 
 Note:
 

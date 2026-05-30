@@ -7,23 +7,23 @@ import gitlab.v4.objects
 
 from fg_migration import fg_print
 from fg_migration.canonical_types import CanonicalGpgKey, CanonicalKey, CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoAccessor, CanonicalRepoAccessors, CanonicalRepositoryRole, CanonicalSystemUser, CanonicalTeam, CanonicalUser, MigrationSource
-from fg_migration.config_types import GitlabMigrationConfig
+from fg_migration.config_types import GitLabMigrationConfig
 from fg_migration.utils import name_clean
-from migrate import GitlabConfig
+from migrate import GitLabConfig
 
-class GitlabMigrationSource(MigrationSource):
+class GitLabMigrationSource(MigrationSource):
 
     gitlab_api: gitlab.Gitlab
-    gitlab_config: GitlabConfig
-    gitlab_migration_config: GitlabMigrationConfig
-    source_system: str = "Gitlab"
+    gitlab_config: GitLabConfig
+    gitlab_migration_config: GitLabMigrationConfig
+    source_system: str = "GitLab"
 
     access_level_role_map : dict[int,CanonicalRepositoryRole|str]
 
     def __init__(self, 
                  gitlab_api:gitlab.Gitlab,
-                 gitlab_config:GitlabConfig,
-                 gitlab_migration_config:GitlabMigrationConfig):
+                 gitlab_config:GitLabConfig,
+                 gitlab_migration_config:GitLabMigrationConfig):
         self.gitlab_api = gitlab_api
         self.gitlab_config = gitlab_config
         self.gitlab_migration_config = gitlab_migration_config
@@ -45,7 +45,7 @@ class GitlabMigrationSource(MigrationSource):
                 case CanonicalRepositoryRole.GUEST:
                     access_level_role_map[10] = role
                 case _:
-                    raise Exception(f"No Forgejo Role mapping for {role} to Gitlab access level")
+                    raise Exception(f"No Forgejo Role mapping for {role} to GitLab access level")
 
     def _get_is_individual(self, project : gitlab.v4.objects.Project) -> bool:
         namespace_kind = project.namespace.get("kind")
@@ -145,10 +145,10 @@ class GitlabMigrationSource(MigrationSource):
         for project_member in project_members:
             if self.is_ignore_gitlab_user(project_member.username):
                 if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
-                    fg_print.warning(f"Ignored a Gitlab specific system user {project_member.username}. If this is incorrect, rerun import permitting system user cloning")
+                    fg_print.warning(f"Ignored a GitLab specific system user {project_member.username}. If this is incorrect, rerun import permitting system user cloning")
                     continue
                 else:
-                    fg_print.warning(f"Likely a Gitlab specific system user {project_member.username}. Can possibly be deleted after import!")
+                    fg_print.warning(f"Likely a GitLab specific system user {project_member.username}. Can possibly be deleted after import!")
 
             repo_accessors_members.append(CanonicalRepoAccessor(username = project_member.username, access_level= project_member.access_level))
         return repo_accessors
@@ -207,10 +207,10 @@ class GitlabMigrationSource(MigrationSource):
         for user in users:
             if self.is_ignore_gitlab_user(user.username):
                 if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
-                    fg_print.warning(f"Ignored a Gitlab specific system user {user.username}. If this is incorrect, rerun import permitting system user cloning")
+                    fg_print.warning(f"Ignored a GitLab specific system user {user.username}. If this is incorrect, rerun import permitting system user cloning")
                     continue
                 else:
-                    fg_print.warning(f"Likely a Gitlab specific system user {user.username}. Can possibly be deleted after import!")
+                    fg_print.warning(f"Likely a GitLab specific system user {user.username}. Can possibly be deleted after import!")
 
 
             gpg_keys : List[gitlab.v4.objects.UserGPGKey] = user.gpgkeys.list(get_all=True)
