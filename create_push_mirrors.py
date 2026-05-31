@@ -73,7 +73,7 @@ FORGEJO_URL = config.get("migrate", "forgejo_url")
 FORGEJO_API_URL = f"{FORGEJO_URL}/api/v1"
 FORGEJO_ADMIN_USER = config.get("migrate", "forgejo_admin_user")
 FORGEJO_ADMIN_PASS = config.get("migrate", "forgejo_admin_pass")
-FORGEJO_TOKEN = config.get("migrate", "forgejo_token")
+FORGEJO_API_TOKEN = config.get("migrate", "forgejo_token")
 
 if GITLAB_SYNC_CONNECTION_TYPE not in ("ssh", "https"):
     fg_print.error(
@@ -410,7 +410,7 @@ def main():
     # Forgejo
     #
 
-    fg_api = _build_forgejo_api_client(FORGEJO_TOKEN)
+    fg_api = _build_forgejo_api_client(FORGEJO_API_TOKEN)
 
     try:
         serverVersion = fg_api.miscellaneous.get_version()

@@ -6,10 +6,9 @@ import gitlab  # pip install python-gitlab
 import gitlab.v4.objects
 
 from fg_migration import fg_print
-from fg_migration.canonical_types import CanonicalGpgKey, CanonicalKey, CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoAccessor, CanonicalRepoAccessors, CanonicalRepositoryRole, CanonicalSystemUser, CanonicalTeam, CanonicalUser, MigrationSource
-from fg_migration.config_types import GitLabMigrationConfig
-from fg_migration.utils import name_clean
-from migrate import GitLabConfig
+from fg_migration.migration_source_type import MigrationSource
+from fg_migration.canonical_types import CanonicalGpgKey, CanonicalKey, CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoAccessor, CanonicalRepoAccessors, CanonicalRepositoryRole, CanonicalSystemUser, CanonicalTeam, CanonicalUser
+from fg_migration.config_types import GitLabMigrationConfig, GitLabConfig
 
 class GitLabMigrationSource(MigrationSource):
 
@@ -17,7 +16,6 @@ class GitLabMigrationSource(MigrationSource):
     gitlab_config: GitLabConfig
     gitlab_migration_config: GitLabMigrationConfig
     source_system: str = "GitLab"
-
     access_level_role_map : dict[int,CanonicalRepositoryRole|str]
 
     def __init__(self, 
@@ -27,11 +25,11 @@ class GitLabMigrationSource(MigrationSource):
         self.gitlab_api = gitlab_api
         self.gitlab_config = gitlab_config
         self.gitlab_migration_config = gitlab_migration_config
-        self._build_access_role_map()
+        self.access_level_role_map = self._build_access_role_map()
 
-    def _build_access_role_map(self):
+    def _build_access_role_map(self) -> dict[int,CanonicalRepositoryRole|str]:
         """Ensure that every possible Forgejo role is mapped to a respective GitLab access level"""
-        access_level_role_map = {}
+        access_level_role_map : dict[int,CanonicalRepositoryRole|str] = {}
         for role in CanonicalRepositoryRole:
             match role:
                 case CanonicalRepositoryRole.OWNER:
@@ -44,8 +42,13 @@ class GitLabMigrationSource(MigrationSource):
                     access_level_role_map[20] = role
                 case CanonicalRepositoryRole.GUEST:
                     access_level_role_map[10] = role
+                case CanonicalRepositoryRole.UNKNOWN:
+                    # Do nothing, this is a special role for when parsing an existing Forgejo User/Team when an
+                    # exact mapping back to one of these ForgejoRolePermissionDefinition isn't possible
+                    pass
                 case _:
                     raise Exception(f"No Forgejo Role mapping for {role} to GitLab access level")
+        return access_level_role_map
 
     def _get_is_individual(self, project : gitlab.v4.objects.Project) -> bool:
         namespace_kind = project.namespace.get("kind")
@@ -159,7 +162,7 @@ class GitLabMigrationSource(MigrationSource):
         # read all users
         groups: List[gitlab.v4.objects.Group] = self.gitlab_api.groups.list(get_all=True)
         
-        organizations = CanonicalOrganizations(source_type="Groups", members=List[CanonicalOrganization])
+        organizations = CanonicalOrganizations(source_type="Groups", members=[])
 
         group : gitlab.v4.objects.Group
 
@@ -187,7 +190,7 @@ class GitLabMigrationSource(MigrationSource):
             # add the org to the list
             organizations.members.append(this_org)
             
-        return 
+        return organizations
 
     def _find_or_create_team(self, access_level_teams_map:dict[str,List[CanonicalTeam]], access_level:int) -> CanonicalTeam:
         # create a new team for each access level that doesn't already have one.
@@ -217,7 +220,7 @@ class GitLabMigrationSource(MigrationSource):
             keys: List[gitlab.v4.objects.UserKey] = user.keys.list(get_all=True)
             
             emailAddress : str = self._build_or_extract_email(user)
-            canonical_keys = [CanonicalKey(key.title, key.key) for key in keys]
+            canonical_keys = [CanonicalKey(name=key.title, key=key.key) for key in keys]
             canonical_gpg_keys : List[CanonicalGpgKey] = []
             for gpg_key in gpg_keys:
                 key_id = getattr(gpg_key, "key_id", None)
@@ -227,7 +230,7 @@ class GitLabMigrationSource(MigrationSource):
                 canonical_gpg_keys.append(CanonicalGpgKey(name=key_id, armored_public_key=key_content, armored_signature=None))
                 
             canonical_users.append(CanonicalSystemUser(gpg_keys=canonical_gpg_keys,keys=canonical_keys,
-                                                       email=emailAddress, full_name=user.full_name,
+                                                       email=emailAddress, full_name=user.name,
                                                        username=user.username, source_system=self.source_system))
         return canonical_users
 

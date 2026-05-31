@@ -1,4 +1,5 @@
 
+from abc import abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field
 import os
@@ -40,19 +41,52 @@ class ForgejoTeamDefinition:
     permissions: ForgejoRolePermissionDefinition
 
     @staticmethod
-    def fromTeam(team:Team) -> ForgejoTeamDefinition:
-        return ForgejoTeamDefinition(name=team.name,
-                              description=team.description,
-                              permissions=ForgejoRolePermissionDefinition(
-                                  can_create_org_repo=team.can_create_org_repo,
-                                  includes_all_repositories=team.includes_all_repositories,
-                                  permission=team.permission,
-                                  units_map=team.units_map
-                              ))
+    def fromTeam(team:Team, role_builder:CanonicalTeamRoleBuilder=None) -> ForgejoTeamDefinition:
+        """Note: The role cannot be set in this instance. Set to CanonicalRepositoryRole.UNKNOWN"""
+        
+        role = CanonicalRepositoryRole.UNKNOWN
+        if role_builder:
+            role = role_builder.get_role_matching_permission(team=team)
+        return ForgejoTeamDefinition(
+                            name=team.name,
+                            description=team.description,
+                            permissions=ForgejoRolePermissionDefinition(
+                                role=role,
+                                can_create_org_repo=team.can_create_org_repo,
+                                includes_all_repositories=team.includes_all_repositories,
+                                permission=team.permission,
+                                units_map=team.units_map
+                            )
+                        )
     
     def diff(self, other:ForgejoTeamDefinition) -> str :
         return diff_dataclasses(self,other)
 
+class CanonicalTeamRoleBuilder:
+    @abstractmethod
+    def get_role_matching_team(team:Team) -> CanonicalRepositoryRole:
+        pass
+
+class ForgejoCanonicalTeamRoleMapper(CanonicalTeamRoleBuilder):
+
+    role_definitions : Dict[CanonicalRepositoryRole|str,ForgejoRolePermissionDefinition]
+
+    def __init__(self, role_definitions:Dict[CanonicalRepositoryRole|str,ForgejoRolePermissionDefinition]):
+        self.role_definitions = role_definitions
+    
+
+
+    def get_role_matching_permission(self, team:Team) -> CanonicalRepositoryRole:
+        perms=team.units_map
+        for role,perm_def in self.role_definitions.items():
+            if str(perm_def.permission) == str(team.permission) and perm_def.units_map == perms:
+                if isinstance(role, CanonicalRepositoryRole):
+                    fg_print.debug(f"SUCCESS: Found default role for team {team.name} : {role.name}")
+                else:
+                    fg_print.debug(f"SUCCESS: Found generated role for team {team.name} : {role.name}")
+                return role
+        fg_print.debug(f"FAIL: Unable to find role for team {team.name}")
+        return CanonicalRepositoryRole.UNKNOWN
 
 class ForgejoMigrator:
     
@@ -61,14 +95,17 @@ class ForgejoMigrator:
     forgejo_migration_config : ForgejoMigrationConfig
     role_definitions : Dict[CanonicalRepositoryRole|str,ForgejoRolePermissionDefinition] # Note we permit str keys too so unexpected source access levels can be cached
     team_definitions : Dict[CanonicalRepositoryRole|str,ForgejoTeamDefinition] # Note we permit str keys too so unexpected source access levels can be cached
-
+    forgejo_team_to_role_mapper : CanonicalTeamRoleBuilder
 
     def __init__(self, fg_api:pyforgejo.PyforgejoApi, forgejo_config:ForgejoConfig, forgejo_migration_config=ForgejoMigrationConfig):
         self.fg_api = fg_api
         self.forgejo_config = forgejo_config
         self.forgejo_migration_config = forgejo_migration_config
-        self._build_role_definitions()
-        self._build_team_definitions()
+        self.role_definitions = self._build_role_definitions()
+        self.team_definitions = self._build_team_definitions()
+        #TODO currently this is a basic mapper, but it might be nice to have it pick the 
+        #     closest matched role and then create a new custom one based on the one picked
+        self.forgejo_team_to_role_mapper = ForgejoCanonicalTeamRoleMapper(role_definitions=self.role_definitions)
     
     def _get_forgejo_labels(self, owner: str, repo: str) -> List[Label]:
         """get labels for a repository"""
@@ -83,41 +120,56 @@ class ForgejoMigrator:
 
 
 
-    def  _build_team_definitions(self):
-        self.team_definitions = {}
+    def  _build_team_definitions(self) -> Dict[CanonicalRepositoryRole|str,ForgejoTeamDefinition]:
+        team_definitions : Dict[CanonicalRepositoryRole|str,ForgejoTeamDefinition] = {}
         for role in CanonicalRepositoryRole:
             match role:
                 case CanonicalRepositoryRole.OWNER:
-                    self.team_definitions[role] = ForgejoTeamDefinition(name=self.forgejo_migration_config.ORG_TEAM_OWNERS_NAME,
-                                                                        description=self.forgejo_migration_config.ORG_TEAM_OWNERS_DESCRIPTION,
-                                                                        permissions=self.role_definitions[role]),
+                    team_definitions[role] = ForgejoTeamDefinition(
+                                                    name=self.forgejo_migration_config.ORG_TEAM_OWNERS_NAME,
+                                                    description=self.forgejo_migration_config.ORG_TEAM_OWNERS_DESCRIPTION,
+                                                    permissions=self.role_definitions[role]
+                                                )
                 case CanonicalRepositoryRole.MAINTAINER:
-                    self.team_definitions[role] = ForgejoTeamDefinition(name=self.forgejo_migration_config.ORG_TEAM_MAINTAINERS_NAME,
-                                                                        description=self.forgejo_migration_config.ORG_TEAM_MAINTAINERS_DESCRIPTION,
-                                                                        permissions=self.role_definitions[role])
+                    team_definitions[role] = ForgejoTeamDefinition(
+                                                    name=self.forgejo_migration_config.ORG_TEAM_MAINTAINERS_NAME,
+                                                    description=self.forgejo_migration_config.ORG_TEAM_MAINTAINERS_DESCRIPTION,
+                                                    permissions=self.role_definitions[role]
+                                                )
                 case CanonicalRepositoryRole.DEVELOPER:
-                    self.team_definitions[role] = ForgejoTeamDefinition(name=self.forgejo_migration_config.ORG_TEAM_DEVELOPERS_NAME,
-                                                                        description=self.forgejo_migration_config.ORG_TEAM_DEVELOPERS_DESCRIPTION,
-                                                                        permissions=self.role_definitions[role])
+                    team_definitions[role] = ForgejoTeamDefinition(
+                                                    name=self.forgejo_migration_config.ORG_TEAM_DEVELOPERS_NAME,
+                                                    description=self.forgejo_migration_config.ORG_TEAM_DEVELOPERS_DESCRIPTION,
+                                                    permissions=self.role_definitions[role]
+                                                )
                 case CanonicalRepositoryRole.REPORTER:
-                    self.team_definitions[role] = ForgejoTeamDefinition(name=self.forgejo_migration_config.ORG_TEAM_REPORTERS_NAME,
-                                                                        description=self.forgejo_migration_config.ORG_TEAM_REPORTERS_DESCRIPTION,
-                                                                        permissions=self.role_definitions[role])
+                    team_definitions[role] = ForgejoTeamDefinition(
+                                                    name=self.forgejo_migration_config.ORG_TEAM_REPORTERS_NAME,
+                                                    description=self.forgejo_migration_config.ORG_TEAM_REPORTERS_DESCRIPTION,
+                                                    permissions=self.role_definitions[role]
+                                                )
                 case CanonicalRepositoryRole.GUEST:
-                    self.team_definitions[role] = ForgejoTeamDefinition(name=self.forgejo_migration_config.ORG_TEAM_GUESTS_NAME,
-                                                                        description=self.forgejo_migration_config.ORG_TEAM_GUESTS_DESCRIPTION,
-                                                                        permissions=self.role_definitions[role])
+                    team_definitions[role] = ForgejoTeamDefinition(
+                                                    name=self.forgejo_migration_config.ORG_TEAM_GUESTS_NAME,
+                                                    description=self.forgejo_migration_config.ORG_TEAM_GUESTS_DESCRIPTION,
+                                                    permissions=self.role_definitions[role]
+                                                )
+                case CanonicalRepositoryRole.UNKNOWN:
+                    # Do nothing, this is a special role for when parsing an existing Forgejo User/Team when an
+                    # exact mapping back to one of these ForgejoRolePermissionDefinition isn't possible
+                    pass
                 case _:
                     raise Exception(f"No Forgejo Team Definition mapping for Role {role}")   
+        return team_definitions
         
 
 
-    def _build_role_definitions(self):
-        self.role_definitions = {}
+    def _build_role_definitions(self) -> Dict[CanonicalRepositoryRole|str,ForgejoRolePermissionDefinition]:
+        role_definitions = {}
         for role in CanonicalRepositoryRole:
             match role:
                 case CanonicalRepositoryRole.OWNER:
-                    self.role_definitions[role] = ForgejoRolePermissionDefinition(
+                    role_definitions[role] = ForgejoRolePermissionDefinition(
                                                     role=role,
                                                     permission="admin", # Not supported
                                                     units_map= { "repo.actions": "write", "repo.code": "write", "repo.ext_issues": "read", 
@@ -126,7 +178,7 @@ class ForgejoMigrator:
                                                                  "repo.wiki": "admin" }
                                                 )
                 case CanonicalRepositoryRole.MAINTAINER:
-                    self.role_definitions[role] = ForgejoRolePermissionDefinition(
+                    role_definitions[role] = ForgejoRolePermissionDefinition(
                                                     role=role,
                                                     permission="admin",
                                                     units_map= { "repo.actions": "write", "repo.code": "write", "repo.ext_issues": "read", 
@@ -135,7 +187,7 @@ class ForgejoMigrator:
                                                                 "repo.wiki": "admin" }
                                                 )
                 case CanonicalRepositoryRole.DEVELOPER:
-                    self.role_definitions[role] = ForgejoRolePermissionDefinition(
+                    role_definitions[role] = ForgejoRolePermissionDefinition(
                                                     role=role,
                                                     permission="write",
                                                     units_map= { "repo.actions": "read", "repo.code": "write", "repo.ext_issues": "read", 
@@ -144,7 +196,7 @@ class ForgejoMigrator:
                                                                 "repo.wiki": "write" }
                                                 )
                 case CanonicalRepositoryRole.REPORTER:
-                    self.role_definitions[role] = ForgejoRolePermissionDefinition(
+                    role_definitions[role] = ForgejoRolePermissionDefinition(
                                                     role=role,
                                                     permission="read",
                                                     units_map= { "repo.actions": "none", "repo.code": "read", "repo.ext_issues": "read", 
@@ -153,7 +205,7 @@ class ForgejoMigrator:
                                                                 "repo.wiki": "none" }
                                                 )
                 case CanonicalRepositoryRole.GUEST:
-                    self.role_definitions[role] = ForgejoRolePermissionDefinition(
+                    role_definitions[role] = ForgejoRolePermissionDefinition(
                                                     role=role,
                                                     permission="read",
                                                     units_map= { "repo.actions": "none", "repo.code": "read", "repo.ext_issues": "none", 
@@ -161,8 +213,13 @@ class ForgejoMigrator:
                                                                 "repo.projects": "read", "repo.pulls": "read", "repo.releases": "read", 
                                                                 "repo.wiki": "read" }
                                                 )
+                case CanonicalRepositoryRole.UNKNOWN:
+                    # Do nothing, this is a special role for when parsing an existing Forgejo User/Team when an
+                    # exact mapping back to one of these ForgejoRolePermissionDefinition isn't possible
+                    pass
                 case _:
                     raise Exception(f"No Forgejo Role Definition mapping for Role {role}")
+        return role_definitions
     
 
     def get_forgejo_milestones(self, owner: str, repo: str) -> List[Milestone]:
@@ -190,7 +247,7 @@ class ForgejoMigrator:
             return []
 
     def is_owner_group(self, team:CanonicalTeam) -> bool:
-         return team.source_access_level == self.forgejo_config.FORGEJO_DEFAULT_OWNERS_TEAM_NAME)
+         return team.source_access_level == self.forgejo_config.FORGEJO_DEFAULT_OWNERS_TEAM_NAME
 
     def get_default_owners_team_name(self) -> str:
         return self.forgejo_config.FORGEJO_DEFAULT_OWNERS_TEAM_NAME

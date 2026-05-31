@@ -52,14 +52,14 @@ def warning(msg) -> None:
     print_color(Bcolors.WARNING, msg)
 
 
-def error(msg: str, element: str=None) -> int:
+def error(msg:str, element:str=None) -> int:
     """Prints an error message and increments the global error count"""
     global GLOBAL_ERROR_COUNT  # pylint: disable=global-statement
     global GLOBAL_ERROR_LIST  # pylint: disable=global-variable-not-assigned
     if element:
         GLOBAL_ERROR_LIST.append(element)
     else:
-        GLOBAL_ERROR_LIST.append(str)
+        GLOBAL_ERROR_LIST.append(msg)
     GLOBAL_ERROR_COUNT += 1
     print_color(Bcolors.FAIL, msg)
     return GLOBAL_ERROR_COUNT
