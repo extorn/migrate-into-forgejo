@@ -1,8 +1,5 @@
 
-from abc import ABC, abstractmethod
-from collections import defaultdict
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import List
 
 
@@ -111,7 +108,7 @@ class CanonicalRepoAccessors:
     
     @staticmethod
     def get_grouped_by_access_level(members:List[CanonicalRepoAccessor]) -> dict[str,set[CanonicalRepoAccessor]]:
-        grouped_by_access_level : dict[str,set[CanonicalRepoAccessor]] = defaultdict(set)
+        grouped_by_access_level : dict[str,set[CanonicalRepoAccessor]] = {}
         for member in members:
             grouped_by_access_level[member.access_level].add(member)
         return grouped_by_access_level

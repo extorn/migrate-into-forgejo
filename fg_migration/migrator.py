@@ -326,7 +326,7 @@ class Migrator:
             # group the accessors by unique source access level
             grouped_repo_accessors_by_source_access_level : dict[str,set[CanonicalRepoAccessor]] = CanonicalRepoAccessors.get_grouped_by_access_level(repo_accessors_not_added_via_teams)
 
-            individual_collaborators_map : dict[CanonicalRepoAccessor,set[CreateTeamOptionPermission]] = []
+            individual_collaborators_map : dict[CanonicalRepoAccessor,set[CreateTeamOptionPermission]] = {}
             
             for source_access_level,source_repo_accessors in grouped_repo_accessors_by_source_access_level.items():
                 
