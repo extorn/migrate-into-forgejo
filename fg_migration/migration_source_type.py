@@ -35,3 +35,7 @@ class MigrationSource(ABC):
                                  allow_downgrade:bool,
                                  allow_upgrade:bool) -> ForgejoRepositoryRole | None:
         pass
+
+    @abstractmethod
+    def list_mapped_forgejo_repository_roles(self) -> set[ForgejoRepositoryRole]:
+        pass

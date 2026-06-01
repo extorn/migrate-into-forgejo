@@ -109,6 +109,12 @@ class GitLabMigrationSource(MigrationSource):
 
 
     @override
+    def list_mapped_forgejo_repository_roles(self) -> set[ForgejoRepositoryRole]:
+        return set(self.access_level_role_map.values())
+
+
+
+    @override
     def listRepos(self) -> List[CanonicalRepo]:
         projects: List[gitlab.v4.objects.Project] = self.gitlab_api.projects.list(get_all=True)
         fg_print.info(f"Found {len(projects)} gitlab projects as user {self.gitlab_api.user.username}")

@@ -26,6 +26,16 @@ class Migrator:
         self.migration_config = migration_config
         self.migration_source = migration_source
         self.migration_date_time = f'{datetime.datetime.now():%Y%m%d_%H:%M:%S}'
+        self.run_logic_checks()
+
+    def run_logic_checks(self):
+        
+        source_roles = self.migration_source.list_mapped_forgejo_repository_roles()
+        destination_roles = self.migration_dest.role_definitions.keys()
+        missing_roles = source_roles - destination_roles
+        if len(missing_roles) > 0:
+            fg_print.error(f"Migration cannot be run, the following roles are mapped from the source system but missing in the destination system: {missing_roles}. Please add these roles to the destination system or remove the mapping for these roles in the migration configuration and try again.")
+            raise Exception("Migration cannot be run, missing mapped roles in destination system")
     
     #TODO reenable this code and update it to work (it isn't strictly required, but someone may find it useful to customise what happens normally in the auto-migrate)        
 

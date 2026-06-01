@@ -96,8 +96,7 @@ def main():
     try:
         response = fg.miscellaneous.get_version()
     except Exception as e:
-        detail = ForgejoMigrator._get_exception_detail(e)
-        fg_print.error(f"Failed to connect to Forgejo! {detail}")
+        fg_print.error(f"Failed to connect to Forgejo! {e}")
         os.sys.exit()
     fg_ver = response.version
     
