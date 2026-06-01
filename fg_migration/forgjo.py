@@ -218,7 +218,6 @@ class ForgejoMigrator:
     default_team_definitions : dict[ForgejoRepositoryRole,ForgejoTeamDefinition]
     role_definitions : dict[ForgejoRepositoryRole,ForgejoRolePermissionDefinition]
     team_definitions : dict[ForgejoRepositoryRole,ForgejoTeamDefinition]
-    get_default_team_definitions = lambda self : self.default_team_definitions.values()
     forgejo_team_to_role_mapper : ForgejoTeamRoleBuilder
 
     def __init__(self, fg_api:pyforgejo.PyforgejoApi, forgejo_config:ForgejoConfig):
@@ -229,7 +228,10 @@ class ForgejoMigrator:
         self.team_definitions = deepcopy(self.default_team_definitions)
         self.forgejo_team_to_role_mapper = ForgejoTeamRoleMapper(role_definitions=self.role_definitions)
     
-    def _get_forgejo_labels(self, owner: str, repo: str) -> List[Label]:
+    def get_default_team_definitions(self) -> list[ForgejoTeamDefinition]:
+        return self.default_team_definitions.values()
+
+    def _get_forgejo_labels(self, owner: str, repo: str) -> list[Label]:
         """get labels for a repository"""
         
         try:
@@ -901,6 +903,7 @@ class ForgejoMigrator:
     def forgejo_update_organization_team(self, team:Team, current_definition:ForgejoTeamDefinition, new_definition:ForgejoTeamDefinition) -> Team | None :
         """Rename a Forgejo Team (e.g. Owners)"""
         try:
+            fg_print.info(f"Updating Forgejo team {team.name} using new definition {new_definition}...")
             updated = self.fg_api.organization.org_edit_team(id=team.id,
                                                         name=new_definition.name,
                                                         can_create_org_repo=new_definition.permissions.can_create_org_repo, 

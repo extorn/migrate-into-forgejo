@@ -90,17 +90,18 @@ class GitLabMigrationConfig:
     @classmethod
     def from_config(cls, config:configparser.RawConfigParser, section:str="migrate.gitlab"):
         default_ignored_users = GitLabMigrationConfig._build_default_ignored_users()
-        raw_users = config.get(section,
-                               "gitlab_system_users",
-                               fallback=",".join(default_ignored_users))
+        users = cls._parse_user_list(config.get(section, "gitlab_system_users", fallback=None)
+                                    ) or default_ignored_users
         return cls(
             IGNORE_GITLAB_SYSTEM_USERS = config.getboolean(section, "ignore_gitlab_system_users", fallback=False),
-            IGNORED_GITLAB_SYSTEM_USERS = cls._parse_user_list(raw_users),
+            IGNORED_GITLAB_SYSTEM_USERS = users,
             ACCESS_LEVELS_TO_FORGEJO_ROLES_MAP_FILE_PATH = config.get(section, option="access_levels_to_forgejo_role_map_file_path", fallback="gitlab_forgejo_roles_map.yaml"),
         )
     
     @staticmethod
-    def _parse_user_list(value: str) -> set[str]:
+    def _parse_user_list(value: str|None) -> set[str]|None:
+        if value is None:
+            return None
         return {
             user.strip()
             for user in value.split(",")

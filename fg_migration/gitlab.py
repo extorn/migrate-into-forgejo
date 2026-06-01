@@ -75,6 +75,7 @@ class GitLabMigrationSource(MigrationSource):
                 or BOT_REGEX.match(username)):
                 if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
                     return True
+        fg_print.debug(f"username {username} not in ignored users list {self.gitlab_migration_config.IGNORED_GITLAB_SYSTEM_USERS} and does not match bot regex, will not ignore")
         return False
         
 
@@ -189,6 +190,13 @@ class GitLabMigrationSource(MigrationSource):
             
             # For every user that has access to this group
             for member in groupMembers:
+                if self._is_ignore_gitlab_user(member.username):
+                    if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
+                        fg_print.warning(f"Ignored a GitLab specific system user {member.username}. If this is incorrect, rerun import permitting system user cloning")
+                        continue
+                    else:
+                        fg_print.warning(f"Likely a GitLab specific system user {member.username}. Can possibly be deleted after import!")
+
                 # get the correct team
                 team = self._find_or_create_team(access_level_teams_map=access_role_teams_map, access_level=member.access_level)
                 
