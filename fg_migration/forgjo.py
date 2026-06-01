@@ -6,7 +6,7 @@ import os
 import random
 import re
 import string
-from typing import List, override
+from typing import override
 from pyforgejo.core import RequestOptions
 from typing_extensions import deprecated
 
@@ -279,11 +279,11 @@ class ForgejoMigrator:
 
     
 
-    def get_forgejo_milestones(self, owner: str, repo: str) -> List[Milestone]:
+    def get_forgejo_milestones(self, owner: str, repo: str) -> list[Milestone]:
         """get milestones for a repository"""
 
         try:
-            existing_milestones : List[Milestone] = self.fg_api.issue.get_milestones_list(owner, repo)
+            existing_milestones : list[Milestone] = self.fg_api.issue.get_milestones_list(owner, repo)
             return existing_milestones
         except Exception as e:
             detail = self._get_exception_detail(e)
@@ -292,7 +292,7 @@ class ForgejoMigrator:
 
 
 
-    def get_forgejo_issues(self, owner: str, repo: str) -> List[Issue]:
+    def get_forgejo_issues(self, owner: str, repo: str) -> list[Issue]:
         """get issues for a repository"""
 
         try:
@@ -316,7 +316,7 @@ class ForgejoMigrator:
         return self.forgejo_config.FORGEJO_DEFAULT_OWNERS_TEAM_NAME
        
 
-    def get_forgejo_teams(self, org_name: str) -> List[Team]:
+    def get_forgejo_teams(self, org_name: str) -> list[Team]:
         """get teams for an organization"""
 
         try:
@@ -329,7 +329,7 @@ class ForgejoMigrator:
         
 
 
-    def get_forgejo_team_members(self, team: Team) -> List[User]:
+    def get_forgejo_team_members(self, team: Team) -> list[User]:
         """get members for a team"""
 
         try:
@@ -342,7 +342,7 @@ class ForgejoMigrator:
 
 
 
-    def get_forgejo_collaborators(self, owner_username: str, repo: str) -> List[User]:
+    def get_forgejo_collaborators(self, owner_username: str, repo: str) -> list[User]:
         """get collaborators for a repository"""
 
         try:
@@ -355,7 +355,7 @@ class ForgejoMigrator:
 
 
 
-    def get_forgejo_user_keys(self, username : str) -> List[PublicKey] :
+    def get_forgejo_user_keys(self, username : str) -> list[PublicKey] :
         """get public keys for a user"""
 
         try:
@@ -366,7 +366,7 @@ class ForgejoMigrator:
             fg_print.error(f"Failed to retrieve public keys for user {username}! {detail}")
         return []
 
-    def get_forgejo_user_gpg_keys(self, username : str) -> List[GpgKey] :
+    def get_forgejo_user_gpg_keys(self, username : str) -> list[GpgKey] :
         """get gpg keys for a user"""
 
         try:
@@ -411,7 +411,7 @@ class ForgejoMigrator:
         """check if a user exists"""
         try:
             user = self.fg_api.user.get(username)
-            fg_print.warning(f"User {user.login}, (name {user.full_name}) already exists in Forgejo, skipping!")
+            fg_print.warning(f"User {user.login}, (name '{user.full_name}') already exists in Forgejo, skipping!")
             return True
         except NotFoundError:
             return False
@@ -422,7 +422,7 @@ class ForgejoMigrator:
 
 
 
-    def list_forgejo_organizations(self) -> List[Organization]:
+    def list_forgejo_organizations(self) -> list[Organization]:
         """list all organizations in Forgejo"""
         try:
             orgs = self.fg_api.organization.org_get_all()
@@ -476,7 +476,7 @@ class ForgejoMigrator:
     def forgejo_collaborator_exists(self, _owner: str, repo: str, username: str) -> bool:
         """check if a collaborator exists in a repository"""
         try:
-            collaborators : List[User] = self.fg_api.repository.repo_list_collaborators(_owner, repo)
+            collaborators : list[User] = self.fg_api.repository.repo_list_collaborators(_owner, repo)
             existing = next(
                 (c for c in collaborators if c.username == username),
                 None,
@@ -543,7 +543,7 @@ class ForgejoMigrator:
 
 
 
-    def forgejo_issue_exists(self, existing_issues : List[Issue], repo: str, issue_title: str) -> bool:
+    def forgejo_issue_exists(self, existing_issues : list[Issue], repo: str, issue_title: str) -> bool:
         """check if an issue exists in a repository"""
         
         if existing_issues:
@@ -565,7 +565,7 @@ class ForgejoMigrator:
 
 
 
-    def find_forgejo_milestone_id_by_title(self, forgejo_milestones: List[Milestone], title: str) -> int:
+    def find_forgejo_milestone_id_by_title(self, forgejo_milestones: list[Milestone], title: str) -> int:
         """get milestone id by title"""
         # get the forgejo milestone with matching title
         # the issue, if it exists, otherwise return None
@@ -584,7 +584,7 @@ class ForgejoMigrator:
 
 
 
-    def find_forgejo_milestone_by_title(self, existing_milestones : List[Milestone], title: str) -> bool:
+    def find_forgejo_milestone_by_title(self, existing_milestones : list[Milestone], title: str) -> bool:
         """check if a milestone exists in a repository"""
         
         if existing_milestones:
@@ -686,7 +686,7 @@ class ForgejoMigrator:
 
     def forgejo_list_team_in_repository(self,
                                         owner_username:str,
-                                        repo_name:str) -> List[Team]:
+                                        repo_name:str) -> list[Team]:
         """List all teams in a repository"""
         try:
             return self.fg_api.repository.repo_list_teams(owner=owner_username,repo=repo_name)
@@ -874,7 +874,7 @@ class ForgejoMigrator:
 
 
 
-    def forgejo_add_milestone(self, owner: str, repo: str, forgejo_milestones:List[Milestone], title: str, description: str, due_date: str, state: str) -> bool:
+    def forgejo_add_milestone(self, owner: str, repo: str, forgejo_milestones:list[Milestone], title: str, description: str, due_date: str, state: str) -> bool:
         """add a milestone to a repository"""
         forgejo_milestone : Milestone = self.find_forgejo_milestone_by_title(forgejo_milestones, title)
 

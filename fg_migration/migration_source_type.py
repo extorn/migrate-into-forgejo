@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import List
 
 from fg_migration.canonical_types import CanonicalOrganizations, CanonicalRepo, CanonicalRepoAccessors, CanonicalSystemUser
 from fg_migration.forgjo import ForgejoRepositoryRole
@@ -11,7 +10,7 @@ class MigrationSource(ABC):
         pass
 
     @abstractmethod
-    def listRepos(self) -> List[CanonicalRepo]:
+    def listRepos(self) -> list[CanonicalRepo]:
         pass
 
     @abstractmethod
@@ -23,7 +22,7 @@ class MigrationSource(ABC):
         pass
 
     @abstractmethod
-    def list_system_users(self) -> List[CanonicalSystemUser]:
+    def list_system_users(self) -> list[CanonicalSystemUser]:
         pass
 
     @abstractmethod

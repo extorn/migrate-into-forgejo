@@ -78,10 +78,8 @@ You need to create a configuration file called `.migrate.ini` and store it in th
 #forgejo_user_roles_file_path=forgejo_user_roles.yaml
 # Url where you have the sign in link on your Forgejo instance
 forgejo_url = https://forgejo.example.com
-### Either a Forgejo token OR admin user and password are required for migrate, but push mirrors requires user and password at present
+### A Forgejo application token - with maximum permissions (for migration at least).
 forgejo_token = <your-forgejo-token>
-forgejo_admin_user = <forgejo-admin-user>
-forgejo_admin_pass = <your-forgejo-password>
 
 
 ### if your forgejo instance requires client authentication, provide the paths to the cert and key files below.

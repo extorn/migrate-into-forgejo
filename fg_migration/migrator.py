@@ -1,9 +1,8 @@
 
 from copy import deepcopy
+from dataclasses import dataclass
 import datetime as datetime
-from typing import List
 
-from annotated_types import LowerCase
 from pyforgejo import CreateTeamOptionPermission, Organization, Repository, Team, User
 
 from fg_migration import fg_print
@@ -28,6 +27,12 @@ class Migrator:
         self.migration_date_time = f'{datetime.datetime.now():%Y%m%d_%H:%M:%S}'
         self.run_logic_checks()
 
+    @dataclass
+    class TeamMatchResult:
+        matched_team: Team | None = None
+        renamed_team: Team | None = None
+        remove_key: str | None = None
+
     def run_logic_checks(self):
         
         source_roles = self.migration_source.list_mapped_forgejo_repository_roles()
@@ -41,7 +46,7 @@ class Migrator:
 
     # def _import_project_labels(
     #     migration_dest: ForgejoMigrator,
-    #     labels: List[gitlab.v4.objects.ProjectLabel],
+    #     labels: list[gitlab.v4.objects.ProjectLabel],
     #     project_owner: str,
     #     project_name: str,
     # ):
@@ -67,7 +72,7 @@ class Migrator:
 
     # def _import_project_milestones(
     #     migration_dest: ForgejoMigrator,
-    #     milestones: List[gitlab.v4.objects.ProjectMilestone],
+    #     milestones: list[gitlab.v4.objects.ProjectMilestone],
     #     project_owner: str,
     #     project_name: str,
     # ):
@@ -88,7 +93,7 @@ class Migrator:
 
     # def _import_project_issues(
     #     migration_dest: ForgejoMigrator,
-    #     issues: List[gitlab.v4.objects.ProjectIssue],
+    #     issues: list[gitlab.v4.objects.ProjectIssue],
     #     project_owner: str,
     #     project_name: str,
     # ):
@@ -116,7 +121,7 @@ class Migrator:
     #                 assignee = name_clean(issue.assignee["username"])
 
     #             # extract list of assignees, mapping to forgejo safe username
-    #             assignees : List[str] = []
+    #             assignees : list[str] = []
     #             for tmp_assignee in issue.assignees:
     #                 assignees.append(name_clean(tmp_assignee["username"]))
 
@@ -148,7 +153,7 @@ class Migrator:
 
 
     #             missing_label = False
-    #             forgejo_issue_label_ids : List[int] = []
+    #             forgejo_issue_label_ids : list[int] = []
     #             for label in issue.labels:
     #                 existing_label : Label = None
     #                 existing_label = next(
@@ -346,18 +351,20 @@ class Migrator:
                 if role_definition is None:
                     source_usernames : set[str] = {accessor.username for accessor in source_repo_accessors}
                     if self.migration_config.IS_FUZZY_USERS_ALLOWED:
-                        fg_print.error(f"Collaborator import failed for users {source_usernames}. Unable to find a direct match for user with source access level {source_access_level}. Check fuzzy match upgrade/downgrade settings in .migrate.ini",
-                                    f"Collaborator import failed for users {source_usernames}. Unable to find a direct match for user with source access level {source_access_level}. Check fuzzy match upgrade/downgrade settings in .migrate.ini")
-                    else:
                         fg_print.error(f"Collaborator import failed for users {source_usernames}. Unable to find neither a direct nor fuzzy match for team with source access level {source_access_level}. Check fuzzy match upgrade/downgrade settings in .migrate.ini",
-                                    f"Collaborator import failed for users {source_usernames}. Unable to find neither a direct nor fuzzy match for team with source access level {source_access_level}. Check fuzzy match upgrade/downgrade settings in .migrate.ini")
+                                       f"Collaborator import failed for users {source_usernames}.")
+                    else:
+                        fg_print.error(f"Collaborator import failed for users {source_usernames}. Unable to find a direct match for user with source access level {source_access_level}. Check fuzzy match upgrade/downgrade settings in .migrate.ini",
+                                       f"Collaborator import failed for users {source_usernames}.")
+                        
                     # try next access level in use.
                     continue
                 
                 forgejo_user_permissions = role_definition.permission
 
                 for accessor in source_repo_accessors:
-                    individual_collaborators_map.get(accessor, set()).update(forgejo_user_permissions)
+                    permissions = individual_collaborators_map.setdefault(accessor, set())
+                    permissions.update(forgejo_user_permissions)
 
             # Now get the highest level of permissions for each individual accessor and add them as collaborators
             for accessor, forgejo_user_permissions in individual_collaborators_map.items():
@@ -367,6 +374,9 @@ class Migrator:
                     perm = "write"
                 elif "read" in forgejo_user_permissions:
                     perm = "read"
+                else:
+                    # theoretically impossible to reach.
+                    continue
                 self._import_individual_user_collaborator(
                                                 existing_collaborator_ids=existing_collaborator_ids,
                                                 accessor=accessor,
@@ -479,51 +489,84 @@ class Migrator:
 
 
 
-    def _find_existing_team_for_new_users_matching(self, existing_forgejo_teams_map : dict[str,Team], 
-                                                   forgejo_team_definition : ForgejoTeamDefinition, canonical_team_members=List[CanonicalUser]) :
-        team_key : str = forgejo_team_definition.name.lower()
-        matched_team = existing_forgejo_teams_map.get(team_key)
-        fg_print.debug(f"Looking for existing team matching {team_key} in set !{existing_forgejo_teams_map.keys()} : Found Match={matched_team is not None}")
-        if matched_team is not None:
-            # get a set of existing users and warn that they will get extra access to what they currently do.
-            # if the imported team matching theirs has access to new repositories, they will be granted that access too.
-            existing_users = {member for member in self.migration_dest.get_forgejo_team_members(matched_team)}
-            if len(existing_users) > 0:
-                canonical_team_members_usernames = {user.get_safe_username() for user in canonical_team_members}
-                existing_usernames = {user.login for user in existing_users if user.login is not None}
-                safe_reuse = False
-                if(existing_usernames == canonical_team_members_usernames):
-                    fg_print.info(f"Pre-existing team users match exactly the users in the team being imported, so no risk of over permission. Affected Forgejo Team {matched_team.name}, usernames: {existing_usernames}")
-                    safe_reuse = True
-                if not safe_reuse:
-                    if self.migration_config.USE_EXISTING_TEAMS:
-                        fg_print.warning(f"Pre-existing team users will be granted access to new repositories that are created with access granted to this team. Affected Forgejo Team {matched_team.name}, usernames: {existing_users}")
-                    else:
-                        # If possible, rename existing Team out of the way.
-                        current_definition = ForgejoTeamDefinition.fromTeam(team=matched_team, role_builder=self.migration_dest.forgejo_team_to_role_mapper, require_exact=True)
-                        
-                        if matched_team.name == self.migration_dest.get_default_owners_team_name():
-                            # Cannot do this test since the Role is not as accurate a reflection of this status as the team name (because hardcoded in Forgejo)
-                            fg_print.warning(f"Pre-existing team users will be granted access to new repositories that are created with access granted to this team. Affected Forgejo Team {matched_team.name}, usernames: {existing_users}")
-                        else:
-                            new_definition = deepcopy(current_definition)
-                            new_definition.name += name_clean(f"_pre_migrate_{self.migration_date_time}")
-                            # replace renamed team in existing teams map.
-                            fg_print.debug(f"Moving team with name {matched_team.name} out of the way to allow creation of new team with the same name for import. Renamed team to {current_definition.name}")
-                            updated_team = self.migration_dest.forgejo_update_organization_team(team=matched_team,
-                                                                                                current_definition=current_definition,
-                                                                                                new_definition=new_definition)
-                            if updated_team is not None:
-                                # now there is no match again :-)
-                                del existing_forgejo_teams_map[team_key]
-                                existing_forgejo_teams_map[current_definition.name] = updated_team
-                                fg_print.debug(f"Success: Moved team with name {matched_team.name} out of the way to allow creation of new team with the same name for import. Renamed team to {updated_team.name}")
-                                matched_team = None
-                            else:
-                                fg_print.debug(f"Failed: Moved team with name {matched_team.name} out of the way to allow creation of new team with the same name for import. Renamed team to {current_definition.name}")
-        else:
+    def _find_matching_team(self,
+                            existing_forgejo_teams_map: dict[str, Team],
+                            forgejo_team_definition: ForgejoTeamDefinition,
+    ) -> Team | None:
+        
+        team_key = forgejo_team_definition.name.lower()
+        found = existing_forgejo_teams_map.get(
+            team_key
+        )
+        if found is None:
             fg_print.debug(f"No existing team matching {team_key} found in set !{existing_forgejo_teams_map.keys()}")
-        return matched_team
+        return found
+    
+    
+
+    def _rename_team_out_of_the_way(self,
+                                    team: Team,
+                                    ) -> TeamMatchResult:
+        
+        current_definition = ForgejoTeamDefinition.fromTeam(
+            team=team,
+            role_builder=self.migration_dest.forgejo_team_to_role_mapper,
+            require_exact=True,
+        )
+
+        new_definition = deepcopy(current_definition)
+        new_definition.name += name_clean(
+            f"_pre_migrate_{self.migration_date_time}"
+        )
+
+        updated_team = self.migration_dest.forgejo_update_organization_team(
+            team=team,
+            current_definition=current_definition,
+            new_definition=new_definition,
+        )
+
+        if updated_team is not None:
+            fg_print.debug(f"Success: Moved team with name {team.name} out of the way to allow creation of new team with the same name for import. Renamed team to {updated_team.name}")
+        else:
+            fg_print.debug(f"Failed: Moved team with name {team.name} out of the way to allow creation of new team with the same name for import.")
+
+        if updated_team is not None:
+            return self.TeamMatchResult(renamed_team=updated_team, remove_key=team.name.lower())
+        
+        return self.TeamMatchResult(matched_team=team)
+
+
+   
+    def _find_existing_org_team_for_new_users_matching(self,
+                                                   organization : CanonicalOrganization,
+                                                   existing_forgejo_teams_map : dict[str,Team], 
+                                                   forgejo_team_definition : ForgejoTeamDefinition, 
+                                                   canonical_team_members : list[CanonicalUser]) -> TeamMatchResult:
+        
+        matched_team = self._find_matching_team(existing_forgejo_teams_map, forgejo_team_definition)
+        if matched_team is None:
+            return self.TeamMatchResult(matched_team=None)
+        
+        existing_usernames = {member.login
+                              for member in self.migration_dest.get_forgejo_team_members(matched_team)
+                              if member.login is not None}
+
+        imported_usernames = { user.get_safe_username()
+                               for user in canonical_team_members}
+
+        if existing_usernames == imported_usernames:
+            fg_print.info(f"Pre-existing team members exactly match team being imported, so reusing. Affected Forgejo Organization {organization.username} Team {matched_team.name}")
+            return self.TeamMatchResult(matched_team=matched_team)
+        
+        if self.migration_config.USE_EXISTING_TEAMS:
+            fg_print.warning(f"Pre-existing team users will be granted access to new repositories that are created with access granted to this team. Affected Forgejo Organization {organization.username} Team {matched_team.name}, usernames: {existing_usernames}")
+            return self.TeamMatchResult(matched_team=matched_team)
+        
+        result = self._rename_team_out_of_the_way(team = matched_team)
+
+
+        return result
+
 
 
     def _import_teams(self, organization:CanonicalOrganization):
@@ -538,7 +581,7 @@ class Migrator:
         existing_forgejo_org_team_names = [team.name for team in existing_forgejo_org_teams_map.values()]
         fg_print.info(f"Existing forgejo teams for Forgejo organization {organization.get_safe_username()} : {existing_forgejo_org_team_names}")
         
-        canonical_teams: List[CanonicalTeam] = organization.teams
+        canonical_teams: list[CanonicalTeam] = organization.teams
         
         # list all the usernames being mapped into teams
         #all_team_forgejo_usernames = [user.get_safe_username() for team in canonical_teams for user in team.users]
@@ -553,20 +596,28 @@ class Migrator:
                 # Unable to map the team from source system to Forgejo.
                 team_source_usernames = [user.username for user in canonical_team.users]
                 if not self.migration_config.IS_FUZZY_TEAMS_ALLOWED and not self.migration_config.IS_FUZZY_USERS_ALLOWED:
+                    # Neither fuzzy teams nor fuzzy users
                     fg_print.error(f"Import to Team failed for {self.migration_source.getSourceSystemName()} users {team_source_usernames}. Unable to find a direct match for team with {self.migration_source.getSourceSystemName()}  access level {canonical_team.source_access_level}. Import will need either Fuzzy teams or Fuzzy users to succeed.",
                                 f"Import to Team failed for {self.migration_source.getSourceSystemName()} users {team_source_usernames}.")
                 elif not self.migration_config.IS_FUZZY_USERS_ALLOWED:
+                    # Only fuzzy teams
                     fg_print.error(f"Import to Team failed for {self.migration_source.getSourceSystemName()} users {team_source_usernames}. Unable to find neither a direct nor fuzzy match for team with {self.migration_source.getSourceSystemName()}  access level {canonical_team.source_access_level}. Check fuzzy match < > settings in .migrate.ini",
                                 f"Import to Team failed for {self.migration_source.getSourceSystemName()} users {team_source_usernames}.")
                 else: # IS_FUZZY_USERS
+                    # Only fuzzy users
                     fg_print.warning(f"Import to Team failed for {self.migration_source.getSourceSystemName()} users {team_source_usernames}. Unable to find neither a direct nor fuzzy match for team with {self.migration_source.getSourceSystemName()}  access level {canonical_team.source_access_level}. User will be added as an individual Collaborator with fuzzy matching if possible")
                 # no team available, try next access level in use.
                 continue
             
             # Find matching team to use (will rename existing ones out of the way if config dictates)
-            existing_team = self._find_existing_team_for_new_users_matching(existing_forgejo_teams_map=existing_forgejo_org_teams_map,
-                                                                            forgejo_team_definition=forgejo_team_definition,
-                                                                            canonical_team_members=canonical_team.users)
+            match_result = self._find_existing_org_team_for_new_users_matching(organization=organization,
+                                                                               existing_forgejo_teams_map=existing_forgejo_org_teams_map,
+                                                                               forgejo_team_definition=forgejo_team_definition,
+                                                                               canonical_team_members=canonical_team.users)
+            if match_result.remove_key is not None:
+                del existing_forgejo_org_teams_map[match_result.remove_key]
+                existing_forgejo_org_teams_map[match_result.renamed_team.name.lower()] = match_result.renamed_team
+            existing_team = match_result.matched_team
             
             is_new_team:bool = False
             if existing_team is None:
@@ -598,7 +649,7 @@ class Migrator:
                 # that would be empty, to avoid creating lots of empty teams with no users in them)
                 
                 if team_def.name.lower() not in existing_forgejo_org_teams_map:
-                    fg_print.debug(f"{team_def.name.lower()} not in {existing_forgejo_org_teams_map.keys()}")
+                    fg_print.debug(f"Team {team_def.name.lower()} not in {existing_forgejo_org_teams_map.keys()}")
                     fg_print.info(f"Adding empty Team {team_def.name} to Organization {organization.get_safe_username()}")
                     forgejo_team = self.migration_dest.forgejo_add_organization_team(org_name=organization.get_safe_username(), definition=team_def)
 
@@ -631,7 +682,7 @@ class Migrator:
     def import_users(self, notify=False):
         """import users and their public keys"""
         # read all users
-        users: List[CanonicalSystemUser] = self.migration_source.list_system_users()
+        users: list[CanonicalSystemUser] = self.migration_source.list_system_users()
 
         fg_print.info(f"Found {len(users)} {self.migration_source.getSourceSystemName()} users")
 
@@ -689,7 +740,7 @@ class Migrator:
     def import_repos(self):
         """read all projects and their issues"""
         
-        source_repos : List[CanonicalRepo] = self.migration_source.listRepos()
+        source_repos : list[CanonicalRepo] = self.migration_source.listRepos()
 
         source_repo : CanonicalRepo
         for source_repo in source_repos:
@@ -706,18 +757,18 @@ class Migrator:
 
             # Handled by inbuilt repo migration
             # import labels
-            #labels: List[gitlab.v4.objects.ProjectLabel] = project.labels.list(get_all=True)
+            #labels: list[gitlab.v4.objects.ProjectLabel] = project.labels.list(get_all=True)
             #fg_print.info(f"Found {len(labels)} labels for project {project.name}")
             #_import_project_labels(fg_api, labels, project_owner_name, project.name)
 
             # Handled by inbuilt repo migration
             # import milestones
-            #milestones: List[gitlab.v4.objects.ProjectMilestone] = project.milestones.list(all=True)
+            #milestones: list[gitlab.v4.objects.ProjectMilestone] = project.milestones.list(all=True)
             #fg_print.info(f"Found {len(milestones)} milestones for project {project.name}")
             #_import_project_milestones(fg_api, milestones, project_owner_name, project.name)
 
             # Handled by inbuilt repo migration
             # import issues
-            #issues: List[gitlab.v4.objects.ProjectIssue] = project.issues.list(get_all=True)
+            #issues: list[gitlab.v4.objects.ProjectIssue] = project.issues.list(get_all=True)
             #fg_print.info(f"Found {len(issues)} issues for project {project.name}")
             #_import_project_issues(fg_api, issues, project_owner_name, project.name)

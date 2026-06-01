@@ -1,6 +1,5 @@
 
 from dataclasses import dataclass, field
-from typing import List
 
 
 
@@ -43,8 +42,8 @@ class CanonicalSystemUser:
     username: str
     full_name: str
     email: str
-    gpg_keys:List[CanonicalGpgKey] = field(default_factory=list)
-    keys:List[CanonicalKey] = field(default_factory=list)
+    gpg_keys:list[CanonicalGpgKey] = field(default_factory=list)
+    keys:list[CanonicalKey] = field(default_factory=list)
 
     def get_safe_username(self) -> str:
         return name_clean(self.username)
@@ -54,7 +53,7 @@ class CanonicalSystemUser:
 @dataclass
 class CanonicalOrganizations:
     source_type:str # what is this type defined as at source e.g. for gitlab, Groups
-    members:List[CanonicalOrganization] = field(default_factory=list)
+    members:list[CanonicalOrganization] = field(default_factory=list)
 
 
 
@@ -64,7 +63,7 @@ class CanonicalOrganization:
     username: str
     full_name:str
     description:str
-    teams:List[CanonicalTeam] = field(default_factory=list)
+    teams:list[CanonicalTeam] = field(default_factory=list)
 
     def get_safe_username(self) -> str:
         return name_clean(self.username)
@@ -73,7 +72,7 @@ class CanonicalOrganization:
 class CanonicalTeam:
     username: str
     source_access_level:str # what is the access level defined in the source system for this team
-    users:List[CanonicalUser] = field(default_factory=list)
+    users:list[CanonicalUser] = field(default_factory=list)
 
     #def get_safe_username(self) -> str:
     #    return name_clean(self.username)
@@ -103,11 +102,11 @@ class CanonicalRepoAccessor:
 @dataclass
 class CanonicalRepoAccessors:
     source_system:str # e.g. gitlab
-    members:List[CanonicalRepoAccessor] = field(default_factory=list)
+    members:list[CanonicalRepoAccessor] = field(default_factory=list)
     source_type:str = "Users" # what is this type defined as at source e.g. for gitlab, Users
     
     @staticmethod
-    def get_grouped_by_access_level(members:List[CanonicalRepoAccessor]) -> dict[str,set[CanonicalRepoAccessor]]:
+    def get_grouped_by_access_level(members:list[CanonicalRepoAccessor]) -> dict[str,set[CanonicalRepoAccessor]]:
         grouped_by_access_level : dict[str,set[CanonicalRepoAccessor]] = {}
         for member in members:
             grouped_by_access_level.get(member.access_level, set()).add(member)

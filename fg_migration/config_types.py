@@ -36,9 +36,6 @@ class ForgejoConfig:
     FORGEJO_URL : str
     FORGEJO_API_URL : str
     FORGEJO_API_TOKEN : str
-    # Not used. The script uses a personal access token for authentication
-    FORGEJO_USER : str | None
-    FORGEJO_PASSWORD : str | None
     
 
     @classmethod
@@ -51,9 +48,6 @@ class ForgejoConfig:
             FORGEJO_URL = forgejo_website_url,
             FORGEJO_API_URL = f"{forgejo_website_url}/api/v1",
             FORGEJO_API_TOKEN = config.get(section, option="forgejo_token"),
-            # user and pass Not used. The script uses a personal access token for authentication
-            FORGEJO_USER = config.get(section, option="forgejo_admin_user", fallback=None), # TODO remove later
-            FORGEJO_PASSWORD = config.get(section, option="forgejo_admin_pass", fallback=None), # TODO remove later
         )
 
 
