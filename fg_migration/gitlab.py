@@ -244,10 +244,10 @@ class GitLabMigrationSource(MigrationSource):
                 team.users.append(CanonicalUser(username=member.username))
 
             # create an organization
-            #We use the gitlab api Group username stored in name here not path because name is the displayed name.
-            # We clean this up before using it in forgejo as a quasi identifier.
+            #We use the gitlab api Group path because it matches that used in the creation of CanonicalRepo (which is essential to link the two together during import)
+            # We clean this up before using it in forgejo as a quasi identifier, so in theory we could use .name instead, but we'd need to to update how we load CanonicalRepo too.
             fg_print.debug(f"name={group.name} path={group.path} fullname={group.full_name}")
-            this_org = CanonicalOrganization(source_type="Group", username=group.name, full_name=group.full_name, 
+            this_org = CanonicalOrganization(source_type="Group", username=group.path, full_name=group.full_name, 
                                              description=group.description, teams=[
                                                                                     team
                                                                                     for team_list in access_role_teams_map.values()
