@@ -147,7 +147,7 @@ class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
         #best_definition = self.role_definitions[best_role]
         fg_print.debug("\n".join(debug_log))
         fg_print.warning(
-            f"No exact role match found for existing Forejo team {team.name}."
+            f"No exact role match found for existing Forejo team {team.name}. "
             f"Closest role is {best_role}, "
             f"but sought permission: {team.permission}, "
             f"sought unit_map:\n{pformat(team.units_map)}"
