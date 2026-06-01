@@ -273,9 +273,9 @@ class Migrator:
         
         # get list of Users that are collaborators already.
         existing_collaborators = self.migration_dest.get_forgejo_collaborators(owner_username=forgejo_repo_owner.username, repo=source_repo.get_safe_name())
-        existing_collaboration_records :dict[int,list[CreateTeamOptionPermission]] = {user.id:[]
-                                                                                     for user in existing_collaborators
-                                                                                     if user.id is not None} # id should ALWAYS be not null since from database
+        existing_collaborator_ids :set[int] = {user.id
+                                                for user in existing_collaborators
+                                                if user.id is not None} # id should ALWAYS be not null since from database
 
         needs_direct_user_collaborators = False # This will become True if not all collaborators are in a team that is itself a Collaborator for this repository
         all_forgejo_teams_members_usernames : set[str] = set() # Collect all users that are members of some team
@@ -326,7 +326,7 @@ class Migrator:
             # group the accessors by unique source access level
             grouped_repo_accessors_by_source_access_level : dict[str,set[CanonicalRepoAccessor]] = CanonicalRepoAccessors.get_grouped_by_access_level(repo_accessors_not_added_via_teams)
 
-            #TODO do I need to sort the source access level descending to ensure we always add collaborators with the highest access level?
+            individual_collaborators_map : dict[CanonicalRepoAccessor,set[CreateTeamOptionPermission]] = []
             
             for source_access_level,source_repo_accessors in grouped_repo_accessors_by_source_access_level.items():
                 
@@ -346,16 +346,25 @@ class Migrator:
                 forgejo_user_permissions = role_definition.permission
 
                 for accessor in source_repo_accessors:
-                    self._import_individual_user_collaborator(
-                                        existing_collaboration_records=existing_collaboration_records,
-                                        accessor=accessor,
-                                        source_repo=source_repo,
-                                        forgejo_permissions=forgejo_user_permissions)
+                    individual_collaborators_map.get(accessor, set()).update(forgejo_user_permissions)
 
+            # Now get the highest level of permissions for each individual accessor and add them as collaborators
+            for accessor, forgejo_user_permissions in individual_collaborators_map.items():
+                if "admin" in forgejo_user_permissions:
+                    perm = "admin"
+                elif "write" in forgejo_user_permissions:
+                    perm = "write"
+                elif "read" in forgejo_user_permissions:
+                    perm = "read"
+                self._import_individual_user_collaborator(
+                                                existing_collaborator_ids=existing_collaborator_ids,
+                                                accessor=accessor,
+                                                source_repo=source_repo,
+                                                forgejo_permissions=perm)
 
 
     def _import_individual_user_collaborator(self,
-                                            existing_collaboration_records:dict[int,list[CreateTeamOptionPermission]],
+                                            existing_collaborator_ids:set[int],
                                             accessor:CanonicalRepoAccessor,
                                             source_repo:CanonicalRepo,
                                             forgejo_permissions:CreateTeamOptionPermission):
@@ -363,12 +372,11 @@ class Migrator:
         forgejo_user = self.migration_dest.get_forgejo_user(username=accessor.get_safe_username())
         if forgejo_user is not None:
             self.migration_dest.forgejo_add_replace_collaboration(
-                                        existing_collaboration_records=existing_collaboration_records, 
+                                        existing_collaborator_ids=existing_collaborator_ids,
                                         user=forgejo_user,
                                         repo=source_repo,
                                         permissions=forgejo_permissions) 
             fg_print.info(f"Registered Forgejo user {accessor.username} as collaborator of {source_repo.get_safe_name()}")
-            existing_collaboration_records[forgejo_user.id].append(forgejo_permissions)
         else:
             fg_print.error(f"Unable to add non existent Forgejo user {accessor.get_safe_username()} as collaborator of {source_repo.get_safe_name()}",
                             f"Unable to add non existent Forgejo user {accessor.get_safe_username()} as collaborator of {source_repo.get_safe_name()}")

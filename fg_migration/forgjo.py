@@ -613,12 +613,12 @@ class ForgejoMigrator:
 
 
     def forgejo_add_replace_collaboration(self,
-                                        existing_collaboration_records:dict[int,list[CreateTeamOptionPermission]],
+                                        existing_collaborator_ids:set[int],
                                         user:User,
                                         repo:CanonicalRepo, permissions:CreateTeamOptionPermission):
         """Add collaboration entry for repo. Will replace any existing one matching the name provided"""
         # If there is an existing collaboration record, delete it.
-        if permissions in existing_collaboration_records.get(user.id, []):
+        if user.id in existing_collaborator_ids:
 
             fg_print.warning(f"Collaboration record for user {user.login} already exists in repository {repo.get_safe_name()}, replacing with new permissions...")
             deleted = self._forgejo_delete_collaborator(repo=repo,
