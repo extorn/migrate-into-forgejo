@@ -19,7 +19,6 @@ Options
 """
 import os
 import configparser
-import typing
 
 from docopt import docopt
 
