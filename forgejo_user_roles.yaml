@@ -1,0 +1,126 @@
+# This is a yaml format file. While easy to read, these files use indentation to provide structure so be careful
+# when editing not to break the format.
+roles:
+# A list of user roles to be (or being) used in this Forgejo server
+# The headings in CAPS must not be changed, they are used as key inside the script
+
+  OWNER:
+    # Note, this team name is not recommended to be altered.
+    # The Forgejo server didn't seem to work correctly for me when changing the name
+    # This is the only group created by default by Forgejo.
+    team_name: Owners
+    team_description: Repository owners with full administrative access.
+
+
+    can_create_org_repo: true
+    includes_all_repositories: true
+
+    permission: owner
+
+    units_map:
+      repo.actions: owner
+      repo.code: owner
+      repo.ext_issues: owner
+      repo.ext_wiki: owner
+      repo.issues: owner
+      repo.packages: owner
+      repo.projects: owner
+      repo.pulls: owner
+      repo.releases: owner
+      repo.wiki: owner
+
+
+
+
+  MAINTAINER:
+    team_name: Maintainers
+    team_description: Repository maintainers with administrative privileges.
+
+    can_create_org_repo: false
+    includes_all_repositories: false
+
+    permission: admin
+
+    units_map:
+      repo.actions: write
+      repo.code: write
+      repo.ext_issues: read
+      repo.ext_wiki: admin
+      repo.issues: write
+      repo.packages: write
+      repo.projects: write
+      repo.pulls: owner
+      repo.releases: write
+      repo.wiki: admin
+
+
+
+  DEVELOPER:
+    team_name: Developers
+    team_description: Developers with write access to repositories.
+
+    can_create_org_repo: false
+    includes_all_repositories: false
+
+    permission: write
+
+    units_map:
+      repo.actions: read
+      repo.code: write
+      repo.ext_issues: read
+      repo.ext_wiki: read
+      repo.issues: write
+      repo.packages: write
+      repo.projects: read
+      repo.pulls: owner
+      repo.releases: write
+      repo.wiki: write
+
+
+
+  REPORTER:
+    team_name: Reporters
+    team_description: Users who can report issues and provide feedback.
+
+    can_create_org_repo: false
+    includes_all_repositories: false
+
+    permission: read
+
+    units_map:
+      repo.actions: none
+      repo.code: read
+      repo.ext_issues: read
+      repo.ext_wiki: read
+      repo.issues: write
+      repo.packages: none
+      repo.projects: none
+      repo.pulls: none
+      repo.releases: none
+      repo.wiki: none
+
+
+
+
+  GUEST:
+    team_name: Guests
+    team_description: Users with limited read-only access.
+
+
+    can_create_org_repo: false
+    includes_all_repositories: false
+
+    permission: read
+
+    units_map:
+      repo.actions: none
+      repo.code: read
+      repo.ext_issues: none
+      repo.ext_wiki: none
+      repo.issues: read
+      repo.packages: read
+      repo.projects: read
+      repo.pulls: read
+      repo.releases: read
+      repo.wiki: read
+

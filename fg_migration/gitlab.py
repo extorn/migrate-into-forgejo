@@ -4,10 +4,12 @@ from typing import List, override
 
 import gitlab  # pip install python-gitlab
 import gitlab.v4.objects
+import yaml
 
 from fg_migration import fg_print
+from fg_migration.forgjo import ForgejoRepositoryRole
 from fg_migration.migration_source_type import MigrationSource
-from fg_migration.canonical_types import CanonicalGpgKey, CanonicalKey, CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoAccessor, CanonicalRepoAccessors, CanonicalRepositoryRole, CanonicalSystemUser, CanonicalTeam, CanonicalUser
+from fg_migration.canonical_types import CanonicalGpgKey, CanonicalKey, CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoAccessor, CanonicalRepoAccessors, CanonicalSystemUser, CanonicalTeam, CanonicalUser
 from fg_migration.config_types import GitLabMigrationConfig, GitLabConfig
 
 class GitLabMigrationSource(MigrationSource):
@@ -16,7 +18,7 @@ class GitLabMigrationSource(MigrationSource):
     gitlab_config: GitLabConfig
     gitlab_migration_config: GitLabMigrationConfig
     source_system: str = "GitLab"
-    access_level_role_map : dict[int,CanonicalRepositoryRole|str]
+    access_level_role_map : dict[int,ForgejoRepositoryRole]
 
     def __init__(self, 
                  gitlab_api:gitlab.Gitlab,
@@ -25,30 +27,23 @@ class GitLabMigrationSource(MigrationSource):
         self.gitlab_api = gitlab_api
         self.gitlab_config = gitlab_config
         self.gitlab_migration_config = gitlab_migration_config
-        self.access_level_role_map = self._build_access_role_map()
+        self.access_level_role_map = self._load_access_levels_roles_map(path=self.gitlab_migration_config.ACCESS_LEVELS_TO_FORGEJO_ROLES_MAP_FILE_PATH)
 
-    def _build_access_role_map(self) -> dict[int,CanonicalRepositoryRole|str]:
-        """Ensure that every possible Forgejo role is mapped to a respective GitLab access level"""
-        access_level_role_map : dict[int,CanonicalRepositoryRole|str] = {}
-        for role in CanonicalRepositoryRole:
-            match role:
-                case CanonicalRepositoryRole.OWNER:
-                    access_level_role_map[50] = role
-                case CanonicalRepositoryRole.MAINTAINER:
-                    access_level_role_map[40] = role
-                case CanonicalRepositoryRole.DEVELOPER:
-                    access_level_role_map[30] = role
-                case CanonicalRepositoryRole.REPORTER:
-                    access_level_role_map[20] = role
-                case CanonicalRepositoryRole.GUEST:
-                    access_level_role_map[10] = role
-                case CanonicalRepositoryRole.UNKNOWN:
-                    # Do nothing, this is a special role for when parsing an existing Forgejo User/Team when an
-                    # exact mapping back to one of these ForgejoRolePermissionDefinition isn't possible
-                    pass
-                case _:
-                    raise Exception(f"No Forgejo Role mapping for {role} to GitLab access level")
+    def _load_access_levels_roles_map(self, path: str) -> dict[int,ForgejoRepositoryRole]:
+        with open(path) as f:
+            cfg = yaml.safe_load(f)
+
+        access_level_role_map : dict[int,ForgejoRepositoryRole] = {}
+
+        for gitlab_access_level, role_cfg in cfg["gitlab_access_levels"].items():
+            role_id = role_cfg.get("forgejo_role").strip() # remove whitespace just in case
+            role = ForgejoRepositoryRole(role_id)
+            gitlab_access_level_int = int(gitlab_access_level)
+            access_level_role_map[gitlab_access_level_int] = role
+
         return access_level_role_map
+    
+
 
     def _get_is_individual(self, project : gitlab.v4.objects.Project) -> bool:
         namespace_kind = project.namespace.get("kind")
@@ -60,17 +55,21 @@ class GitLabMigrationSource(MigrationSource):
             fg_print.error(f"Unsupported namespace kind {project.namespace['kind']} for project {project.name}, skipping import!")
             raise ValueError(f"namespace unsupported {project.namespace['kind']}")
 
+
+
     def _get_gitlab_project_owner_slug(self, project: gitlab.v4.objects.Project) -> str:
         if project.namespace["kind"] == "user":
             return project.namespace["path"]
         elif project.namespace["kind"] == "group":
-            # TODO should this also be: return project.namespace["path"]
+            # TODO should this also be: return project.namespace["path"] (maybe not because in Forgjo, the name is used as the identifier)
             return project.namespace["name"]
         else:
             fg_print.error(f"Unsupported namespace kind {project.namespace['kind']} for project {project.name}, skipping import!")
             return None
         
-    def is_ignore_gitlab_user(self, username : str) -> bool:
+
+
+    def _is_ignore_gitlab_user(self, username : str) -> bool:
         BOT_REGEX = re.compile(r"^project_\d{2}_bot_[a-zA-Z0-9]{32}$")
         if (username in self.gitlab_migration_config.IGNORED_GITLAB_SYSTEM_USERS
                 or BOT_REGEX.match(username)):
@@ -78,6 +77,8 @@ class GitLabMigrationSource(MigrationSource):
                     return True
         return False
         
+
+
     def _build_or_extract_email(self, user: gitlab.v4.objects.User) -> str:
         """build an email address for a user, if the email is not available, we use a dummy email address based on the username"""
         
@@ -98,10 +99,14 @@ class GitLabMigrationSource(MigrationSource):
             pass
         return tmp_email
 
+
+
     @override
     def getSourceSystemName(self) -> str:
         return self.source_system
     
+
+
     @override
     def listRepos(self) -> List[CanonicalRepo]:
         projects: List[gitlab.v4.objects.Project] = self.gitlab_api.projects.list(get_all=True)
@@ -109,10 +114,10 @@ class GitLabMigrationSource(MigrationSource):
 
         repos : List[CanonicalRepo] = []
         project : gitlab.v4.objects.Project
-        seen_repos: dict[int,str] = {}
+        seen_repos_map: dict[int,str] = {}
         for project in projects:
-            if project.get_id() in seen_repos.keys():
-                fg_print.error(f"Already have reference to Project {seen_repos[project.get_id()]} with ID {project.get_id()}")
+            if project.get_id() in seen_repos_map:
+                fg_print.error(f"Already have reference to Project {seen_repos_map[project.get_id()]} with ID {project.get_id()}")
                 continue
 
             owner_name = self._get_gitlab_project_owner_slug(project)
@@ -133,10 +138,12 @@ class GitLabMigrationSource(MigrationSource):
                                        auth_username=auth_username,auth_password=auth_password,auth_token=auth_token,
                                        source_type="Project")
             repos.append(repo)
-            seen_repos[repo.source_id] = repo.name
+            seen_repos_map[repo.source_id] = repo.name
             
         return repos
     
+
+
     @override
     def list_repository_accessors(self, repo:CanonicalRepo) -> CanonicalRepoAccessors:
         # gitlab project = forgejo repo
@@ -146,7 +153,7 @@ class GitLabMigrationSource(MigrationSource):
         repo_accessors_members : List[CanonicalRepoAccessor] = []
         repo_accessors = CanonicalRepoAccessors(source_system=self.source_system, source_type="User", members=repo_accessors_members)
         for project_member in project_members:
-            if self.is_ignore_gitlab_user(project_member.username):
+            if self._is_ignore_gitlab_user(project_member.username):
                 if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
                     fg_print.warning(f"Ignored a GitLab specific system user {project_member.username}. If this is incorrect, rerun import permitting system user cloning")
                     continue
@@ -155,6 +162,7 @@ class GitLabMigrationSource(MigrationSource):
 
             repo_accessors_members.append(CanonicalRepoAccessor(username = project_member.username, access_level= project_member.access_level))
         return repo_accessors
+
 
 
     @override
@@ -169,6 +177,10 @@ class GitLabMigrationSource(MigrationSource):
         # Each group is essentially mapping as repository (or series of) owner (Forgejo organization)
         for group in groups:
             # create a map only to avoid searching for the right team for each user
+            #TODO currently though we have a list of Teams for each org, we simply
+            #     add users to the first matching team in the access level. If actually there are multiple
+            #     users with same access level in a group, but not all sharing access to same repository,
+            #     we'll need to create multiple teams, depending on repository access (which might get complicated quickly)
             access_role_teams_map: dict[int,List[CanonicalTeam]] = {}
             
             # Group members are users. They share a finite set of access_level
@@ -186,29 +198,38 @@ class GitLabMigrationSource(MigrationSource):
             # create an organization
             #TODO is gitlab api Group username stored in path or full_path or username?
             this_org = CanonicalOrganization(source_type="Group", username=group.path, full_name=group.full_name, 
-                                             description=group.description, teams=access_role_teams_map.values())
+                                             description=group.description, teams=[
+                                                                                    team
+                                                                                    for team_list in access_role_teams_map.values()
+                                                                                    for team in team_list
+                                                                                ],) # Note have to flatten the list of teams per access_level here.
             # add the org to the list
             organizations.members.append(this_org)
             
         return organizations
 
-    def _find_or_create_team(self, access_level_teams_map:dict[str,List[CanonicalTeam]], access_level:int) -> CanonicalTeam:
+
+
+    def _find_or_create_team(self, access_level_teams_map:dict[int,List[CanonicalTeam]], access_level:int) -> CanonicalTeam:
         # create a new team for each access level that doesn't already have one.
-        if str(access_level) not in access_level_teams_map:
-            access_level_teams_map[access_level] = CanonicalTeam(
-                username=None,
-                source_access_level=str(access_level),
-                users=[]
-            )
-        team = access_level_teams_map[access_level]
-        return team
+        if access_level not in access_level_teams_map:
+            # create a new team for this access level, we will fill the users later
+            access_level_teams_map[access_level] = [CanonicalTeam(
+                                                        username=None,
+                                                        source_access_level=str(access_level),
+                                                        users=[]
+                                                    )]
+        teams = access_level_teams_map[access_level]
+        return teams[0] #TODO we're not defining teams per repo yet.
+
+
 
     @override
     def list_system_users(self) -> List[CanonicalSystemUser]:
         users: List[gitlab.v4.objects.User] = self.gitlab_api.users.list(get_all=True)
         canonical_users : List[CanonicalSystemUser] = []
         for user in users:
-            if self.is_ignore_gitlab_user(user.username):
+            if self._is_ignore_gitlab_user(user.username):
                 if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
                     fg_print.warning(f"Ignored a GitLab specific system user {user.username}. If this is incorrect, rerun import permitting system user cloning")
                     continue
@@ -237,28 +258,30 @@ class GitLabMigrationSource(MigrationSource):
     
 
     @override
-    def get_repository_role(self, source_access_level:str) -> CanonicalRepositoryRole | str:
-        """Get a predefined CanonicalRepositoryRole or give a unique string to identify a role type that should be used for this access level"""
+    def get_repository_role(self, source_access_level:str) -> ForgejoRepositoryRole:
+        """Get a predefined ForgejoRepositoryRole or give a unique string to identify a role type that should be used for this access level"""
         gitlab_access_level : int = int(source_access_level)
         role = self.access_level_role_map.get(gitlab_access_level)
         if role is None:
             fg_print.error(f"{self.source_system} Access_Level:Role Mapping missing for {source_access_level}")
-            role = f"{self.source_system}_{source_access_level}"
-            fg_print.info(f"Created new {self.source_system} role type : {role}")
-            self.access_level_role_map[gitlab_access_level] = role
+            role_id = f"{self.source_system}_Role_{source_access_level}"
+            fg_print.info(f"Created new {self.source_system} role type : {role_id}")
+            self.access_level_role_map[gitlab_access_level] = ForgejoRepositoryRole(id=role_id, is_custom=True)
         return role
 
 
     @override
     def get_nearest_repository_role(self, source_access_level:str,
                                  allow_downgrade:bool,
-                                 allow_upgrade:bool) -> CanonicalRepositoryRole | None:
+                                 allow_upgrade:bool) -> ForgejoRepositoryRole | None:
         """Used when a new role type has had to be created.
            Get the closest defined role for this access level following the rules.
            The result willl be assigned to be used whenever the custom role type is used"""
         access_level_int = int(source_access_level)
         known_access_levels = sorted(self.access_level_role_map.keys())
         closest_access_level: int | None = None
+        #TODO this isn't very good, we could check the Forgejo roles to see if there are any custom ones
+        #     that we could map to instead of just looking at the predefined ones in the gitlab role mapping, but this is a start.
         if(allow_upgrade):
             larger = min((x for x in known_access_levels if x > access_level_int), default=None)
             if not larger is None:

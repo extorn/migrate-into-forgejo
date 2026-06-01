@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import List
 
-from fg_migration.canonical_types import CanonicalOrganizations, CanonicalRepo, CanonicalRepoAccessors, CanonicalRepositoryRole, CanonicalSystemUser
+from fg_migration.canonical_types import CanonicalOrganizations, CanonicalRepo, CanonicalRepoAccessors, CanonicalSystemUser
+from fg_migration.forgjo import ForgejoRepositoryRole
 
 
 class MigrationSource(ABC):
@@ -26,11 +27,11 @@ class MigrationSource(ABC):
         pass
 
     @abstractmethod
-    def get_repository_role(self, source_access_level:str) -> CanonicalRepositoryRole | str:
+    def get_repository_role(self, source_access_level:str) -> ForgejoRepositoryRole:
         pass
 
     @abstractmethod
     def get_nearest_repository_role(self, source_access_level:str,
                                  allow_downgrade:bool,
-                                 allow_upgrade:bool) -> CanonicalRepositoryRole | None:
+                                 allow_upgrade:bool) -> ForgejoRepositoryRole | None:
         pass

@@ -1,0 +1,20 @@
+# This is a yaml format file. While easy to read, these files use indentation to provide structure so be careful
+# when editing not to break the format.
+gitlab_access_levels:
+  # A list of all gitlab user access levels with the appropriate mapping to a Forgejo user Role
+  # NOTE: the Forgejo ROLES are the headings in forgejo_user_roles.yaml, and must match exactly.
+
+  50:
+    forgejo_role: OWNER
+
+  40:
+    forgejo_role: MAINTAINER
+  
+  30:
+    forgejo_role: DEVELOPER
+  
+  20:
+    forgejo_role: REPORTER
+  
+  10:
+    forgejo_role: GUEST

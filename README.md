@@ -25,7 +25,7 @@ This script supports migration of:
 
 Tested with GitLab Version 17.2.1 and Forgejo Version 8.0.0
 
-## Usage
+## **Usage**
 
 ### How to use with venv
 
@@ -45,7 +45,15 @@ and you call the scripts using `--help`:
 *   `./migrate.py --help`
 *   `./create_push_mirrors.py --help`
 
-### ini file
+### **user\_roles.yaml**
+
+This file contains a list of all supported roles within Forgejo as defined by this script (you are not limited to any number by Forgejo itself.
+
+Please alter the values in this file to match your personal configuration desires, I've tried to set what I thought looked reasonable to me, but I'm confident you may wish to change one two or all values.
+
+The role Headings in CAPITAL LETTERS cannot be altered - these map the roles into this script.
+
+### **ini file**
 
 You need to create a configuration file called `.migrate.ini` and store it in the same directory of the script.  
 :bulb: `.migrate.ini` is listed in `.gitignore`.
@@ -65,7 +73,10 @@ You need to create a configuration file called `.migrate.ini` and store it in th
 ###    input -> my_setting=some_value # A comment
 ###    read as -> my_setting="some_value # A comment"
 [forgejo]
-
+# the yaml file where all the user roles and permissions are defined
+# These roles are used for both users and teams, and eventually for a migration, you'll be able to pick how you map to them using the source access levels to forgejo roles mapping file.
+#forgejo_user_roles_file_path=forgejo_user_roles.yaml
+# Url where you have the sign in link on your Forgejo instance
 forgejo_url = https://forgejo.example.com
 ### Either a Forgejo token OR admin user and password are required for migrate, but push mirrors requires user and password at present
 forgejo_token = <your-forgejo-token>
@@ -125,23 +136,6 @@ gitlab_admin_pass = <your-gitlab-password>
 
 ### If True, allow the closest higher permission defined Forgejo team to be used in lieu (lower have precedence over higher)
 #allow_fuzzy_auth_upgrade=False
-
-
-
-[migrate.forgejo]
-
-### Overrides for organization team names (for their gitlab equivalent)
-#org_team_maintainers_name=Maintainers
-#org_team_developers_name=Developers
-#org_team_reporters_name=Reporters
-#org_team_guests_name=Guests
-
-### Overrides for organization team descriptions
-#org_team_owners_description=Owners
-#org_team_maintainers_description=Maintainers
-#org_team_developers_description=Developers
-#org_team_reporters_description=Reporters
-#org_team_guests_description=Guests
 
 
 

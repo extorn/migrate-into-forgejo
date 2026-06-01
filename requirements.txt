@@ -4,3 +4,4 @@ python-dateutil
 pyforgejo >= 2.0
 docopt-ng
 click
+pyyaml

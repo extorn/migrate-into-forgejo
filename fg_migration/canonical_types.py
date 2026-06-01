@@ -83,6 +83,16 @@ class CanonicalTeam:
 
 
 
+@dataclass
+class CanonicalRepoOwner:
+    id:int|None
+    username:str|None
+
+    def is_complete(self) -> bool:
+        return self.id is not None and self.username is not None
+
+
+
 @dataclass(frozen=True) # This allows use in sets, and I can think of no good reason to ever alter the contents.
 class CanonicalRepoAccessor:
     username:str
@@ -129,13 +139,3 @@ class CanonicalRepo:
     
     def get_safe_owner_name(self) -> str:
         return name_clean(self.owner_name)
-
-class CanonicalRepositoryRole(Enum):
-    OWNER = "Owner",
-    MAINTAINER = "Maintainer",
-    DEVELOPER = "Developer",
-    REPORTER = "Reporter",
-    GUEST = "Guest",
-    #TODO think about UNKNOWN - it complicates match blocks, maybe None is tidier (though having both is a possible bonus)?
-    UNKNOWN = None, # A special role used only when a user has been loaded from Forgejo but a canonical match cannot be found.
-

@@ -32,7 +32,7 @@ import pyforgejo  # pip install pyforgejo (https://github.com/h44z/pyforgejo)
 from pyforgejo import PyforgejoApi
 
 from fg_migration.migration_source_type import MigrationSource
-from fg_migration.config_types import ForgejoConfig, ForgejoMigrationConfig, GitLabConfig, GitLabMigrationConfig, MigrationConfig
+from fg_migration.config_types import ForgejoConfig, GitLabConfig, GitLabMigrationConfig, MigrationConfig
 from fg_migration.forgjo import ForgejoMigrator
 from fg_migration.gitlab import GitLabMigrationSource
 from fg_migration.migrator import Migrator
@@ -54,7 +54,6 @@ config = configparser.RawConfigParser()
 config.read(".migrate.ini")
 migration_config = MigrationConfig.from_config(config=config)
 forgejo_config = ForgejoConfig.from_config(config=config)
-migration_config_forgejo = ForgejoMigrationConfig.from_config(config=config)
 gitlab_config = GitLabConfig.from_config(config=config)
 migration_config_gitlab = GitLabMigrationConfig.from_config(config=config)
 
@@ -105,9 +104,8 @@ def main():
     fg_print.info(f"Connected to Forgejo, version: {fg_ver}")
 
     migration_source : MigrationSource = GitLabMigrationSource(gitlab_api=gl, gitlab_config=gitlab_config, gitlab_migration_config=migration_config_gitlab)
-    migration_dest : ForgejoMigrator = ForgejoMigrator(fg_api=fg, forgejo_config=forgejo_config,  forgejo_migration_config=migration_config_forgejo)
-    migrator = Migrator(migration_config=migration_config, 
-                        migration_config_forgejo=migration_config_forgejo,
+    migration_dest : ForgejoMigrator = ForgejoMigrator(fg_api=fg, forgejo_config=forgejo_config)
+    migrator = Migrator(migration_config=migration_config,
                         migration_source=migration_source, 
                         migration_dest=migration_dest)
 
@@ -128,7 +126,7 @@ def main():
         and not args["projects"]
         and not args["all"]
     ):
-        fg_print.info()
+        fg_print.info("")
         fg_print.warning("No migration option(s) selected, nothing to do!")
         os.sys.exit()
 

@@ -4,9 +4,9 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 import os
 import random
+import re
 import string
-from typing import Dict
-from typing import List
+from typing import List, override
 from pyforgejo.core import RequestOptions
 from typing_extensions import deprecated
 
@@ -17,15 +17,24 @@ import pyforgejo  # pip install pyforgejo (https://github.com/h44z/pyforgejo)
 # Forgejo API imports:
 from pyforgejo import ConflictError, CreateTeamOptionPermission, GpgKey, Issue, Label, Milestone, NotFoundError, Organization, PublicKey, PyforgejoApi, Repository, Team, TeamPermission, User
 from pyforgejo.core.api_error import ApiError
+import yaml
 
 from fg_migration import fg_print
-from fg_migration.canonical_types import CanonicalOrganization, CanonicalRepo, CanonicalRepositoryRole, CanonicalSystemUser, CanonicalTeam
-from fg_migration.config_types import ForgejoConfig, ForgejoMigrationConfig
+from fg_migration.canonical_types import CanonicalOrganization, CanonicalRepo, CanonicalSystemUser, CanonicalTeam
+from fg_migration.config_types import ForgejoConfig
 from fg_migration.utils import diff_dataclasses
+
+
+
+@dataclass(frozen=True)
+class ForgejoRepositoryRole():
+    id: str
+    is_custom: bool = False
+
 
 @dataclass
 class ForgejoRolePermissionDefinition:
-    role : CanonicalRepositoryRole
+    role : ForgejoRepositoryRole
     can_create_org_repo:bool = False
     includes_all_repositories:bool = False
     permission:CreateTeamOptionPermission = ""
@@ -36,76 +45,189 @@ class ForgejoRolePermissionDefinition:
 
 @dataclass
 class ForgejoTeamDefinition:
+    """A definition for a Forgejo team, which may be used to create new teams or compare with existing ones.
+       Note that a team name is its ID, but it is only unique in a given organization.
+       Technically two identically named teams could exist in separate organizations with different permissions
+       This is not currently handled in the code, but it is something to be aware of."""
     name: str
     description: str
     permissions: ForgejoRolePermissionDefinition
 
     @staticmethod
-    def fromTeam(team:Team, role_builder:CanonicalTeamRoleBuilder=None) -> ForgejoTeamDefinition:
-        """Note: The role cannot be set in this instance. Set to CanonicalRepositoryRole.UNKNOWN"""
+    def fromTeam(team:Team, role_builder:ForgejoTeamRoleBuilder, require_exact:bool=False) -> ForgejoTeamDefinition:
+        """Will find a team definition closest matching the team provided according to the rules in role_builder.
+           If require_exact is true, then if none are found, one will be created"""
         
-        role = CanonicalRepositoryRole.UNKNOWN
         if role_builder:
-            role = role_builder.get_role_matching_permission(team=team)
-        return ForgejoTeamDefinition(
-                            name=team.name,
-                            description=team.description,
-                            permissions=ForgejoRolePermissionDefinition(
-                                role=role,
-                                can_create_org_repo=team.can_create_org_repo,
-                                includes_all_repositories=team.includes_all_repositories,
-                                permission=team.permission,
-                                units_map=team.units_map
-                            )
-                        )
+            role,_ = role_builder.get_role_matching_permission(team=team, require_exact=require_exact)
+            
+            role_permissions = role_builder.get_role_permissions(role)
+            # we don't cache these because teams are only unique in a given organization.
+            return ForgejoTeamDefinition(name=team.name, description=team.description, permissions=role_permissions)
+
+        raise Exception("Role builder not available")
     
     def diff(self, other:ForgejoTeamDefinition) -> str :
         return diff_dataclasses(self,other)
 
-class CanonicalTeamRoleBuilder:
+class ForgejoTeamRoleBuilder:
     @abstractmethod
-    def get_role_matching_team(team:Team) -> CanonicalRepositoryRole:
+    def get_role_matching_permission(self, team:Team, require_exact:bool=False) -> tuple[ForgejoRepositoryRole,bool]:
+        """Retrieve the Forgejo role permissions applicable for this role
+           Note; this is used only when retrieving existing teams from the Forgejo server at present
+           @return tuple[role:ForgejoRepositoryRole,is_exact_match:bool]
+        """
+        pass
+    @abstractmethod
+    def get_role_permissions(self, role:ForgejoRepositoryRole) -> ForgejoRolePermissionDefinition:
+        """Retrieve the Forgejo role permissions applicable for this role
+           Note; this is used only when retrieving existing teams from the Forgejo server at present
+        """
         pass
 
-class ForgejoCanonicalTeamRoleMapper(CanonicalTeamRoleBuilder):
+class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
 
-    role_definitions : Dict[CanonicalRepositoryRole|str,ForgejoRolePermissionDefinition]
+    role_definitions : dict[ForgejoRepositoryRole,ForgejoRolePermissionDefinition]
+    custom_role_count: dict[ForgejoRepositoryRole, int] = {}
+    CUSTOM_ROLE_PATTERN = re.compile(r"^Custom_(.+?)_(\d+)$")
 
-    def __init__(self, role_definitions:Dict[CanonicalRepositoryRole|str,ForgejoRolePermissionDefinition]):
+    def __init__(self, role_definitions:dict[ForgejoRepositoryRole,ForgejoRolePermissionDefinition]):
         self.role_definitions = role_definitions
     
 
 
-    def get_role_matching_permission(self, team:Team) -> CanonicalRepositoryRole:
-        perms=team.units_map
-        for role,perm_def in self.role_definitions.items():
-            if str(perm_def.permission) == str(team.permission) and perm_def.units_map == perms:
-                if isinstance(role, CanonicalRepositoryRole):
-                    fg_print.debug(f"SUCCESS: Found default role for team {team.name} : {role.name}")
+    @override
+    def get_role_permissions(self, role:ForgejoRepositoryRole) -> ForgejoRolePermissionDefinition:
+        return self.role_definitions[role]
+    
+    
+    
+    @override
+    def get_role_matching_permission(self, team:Team, require_exact:bool=False) -> tuple[ForgejoRepositoryRole,bool]:
+        
+        best_role = None
+        best_score = float("-inf")
+        debug_log = []
+
+        for role, perm_def in self.role_definitions.items():
+
+            # Exact match shortcut
+            if (
+                str(perm_def.permission) == str(team.permission)
+                and perm_def.units_map == team.units_map
+            ):
+                fg_print.debug(f"SUCCESS: Exact match for team {team.name}: {role}")
+                return role,True
+
+            score = 0
+
+            # Permission match is important
+            if str(perm_def.permission) == str(team.permission):
+                score += 10
+
+            # Compare unit permissions
+            all_units = set(perm_def.units_map) | set(team.units_map)
+
+            for unit in all_units:
+                expected = perm_def.units_map.get(unit)
+                actual = team.units_map.get(unit)
+
+                if expected == actual:
+                    score += 1
                 else:
-                    fg_print.debug(f"SUCCESS: Found generated role for team {team.name} : {role.name}")
-                return role
-        fg_print.debug(f"FAIL: Unable to find role for team {team.name}")
-        return CanonicalRepositoryRole.UNKNOWN
+                    score -= 1
+
+            debug_log.append(f"Role {role} scored {score} for team {team.name}")
+
+            if score > best_score:
+                best_score = score
+                best_role = role
+
+        #best_definition = self.role_definitions[best_role]
+        fg_print.debug("\n".join(debug_log))
+        fg_print.warning(
+            f"No exact role match found for existing Forejo team {team.name}."
+            f"Closest role is {best_role}, but sought permission: {team.permission}, sought unit_map: {team.units_map}"
+        )
+
+        role = best_role
+        if require_exact:
+            role = self.add_custom_forgejo_role(team=team, closest_existing_role=best_role)
+            return role,True
+        return role,False
+    
+    
+
+    def _update_get_custom_role_count(self, role: ForgejoRepositoryRole | None) -> int:
+
+        key = role if role is not None else ForgejoRepositoryRole(id = "UNKNOWN")
+
+        self.custom_role_count[key] = (
+            self.custom_role_count.get(key, 0) + 1
+        )
+
+        return self.custom_role_count[key]
+
+    
+
+    def _is_custom_role(self, role_id: str) -> bool:
+        return bool(self.CUSTOM_ROLE_PATTERN.match(role_id))
+
+
+
+    def _get_custom_role_base(self, role_id: str) -> str:
+        match = self.CUSTOM_ROLE_PATTERN.match(role_id)
+        return match.group(1) if match else role_id
+
+
+
+    def _build_custom_role_id(self, base_name: str, num: int) -> str:
+        return f"Custom_{base_name}_{num}"
+
+
+
+    @override
+    def add_custom_forgejo_role(self, team: Team, closest_existing_role: ForgejoRepositoryRole | None,) -> ForgejoRepositoryRole:
+
+        num = self._update_get_custom_role_count(role=closest_existing_role)
+        base_name = ("Role"
+                        if closest_existing_role is None
+                        else self._get_custom_role_base(closest_existing_role.id)
+                    )
+
+        new_role_id = self._build_custom_role_id(base_name=base_name, num=num,)
+
+        role = ForgejoRepositoryRole(new_role_id)
+
+        self.role_definitions[role] = ForgejoRolePermissionDefinition(
+            role=role,
+            can_create_org_repo=team.can_create_org_repo,
+            includes_all_repositories=team.includes_all_repositories,
+            permission=team.permission,
+            units_map=dict(team.units_map),
+        )
+
+        return role
+
 
 class ForgejoMigrator:
     
     fg_api : pyforgejo.PyforgejoApi
     forgejo_config : ForgejoConfig
-    forgejo_migration_config : ForgejoMigrationConfig
-    role_definitions : Dict[CanonicalRepositoryRole|str,ForgejoRolePermissionDefinition] # Note we permit str keys too so unexpected source access levels can be cached
-    team_definitions : Dict[CanonicalRepositoryRole|str,ForgejoTeamDefinition] # Note we permit str keys too so unexpected source access levels can be cached
-    forgejo_team_to_role_mapper : CanonicalTeamRoleBuilder
+    default_role_definitions : dict[ForgejoRepositoryRole,ForgejoRolePermissionDefinition]
+    default_team_definitions : dict[ForgejoRepositoryRole,ForgejoTeamDefinition]
+    role_definitions : dict[ForgejoRepositoryRole,ForgejoRolePermissionDefinition]
+    team_definitions : dict[ForgejoRepositoryRole,ForgejoTeamDefinition]
+    get_default_team_definitions = lambda self : self.default_team_definitions.values()
+    forgejo_team_to_role_mapper : ForgejoTeamRoleBuilder
 
-    def __init__(self, fg_api:pyforgejo.PyforgejoApi, forgejo_config:ForgejoConfig, forgejo_migration_config=ForgejoMigrationConfig):
+    def __init__(self, fg_api:pyforgejo.PyforgejoApi, forgejo_config:ForgejoConfig):
         self.fg_api = fg_api
         self.forgejo_config = forgejo_config
-        self.forgejo_migration_config = forgejo_migration_config
-        self.role_definitions = self._build_role_definitions()
-        self.team_definitions = self._build_team_definitions()
-        #TODO currently this is a basic mapper, but it might be nice to have it pick the 
-        #     closest matched role and then create a new custom one based on the one picked
-        self.forgejo_team_to_role_mapper = ForgejoCanonicalTeamRoleMapper(role_definitions=self.role_definitions)
+        self.default_role_definitions, self.default_team_definitions = self.load_roles(path=forgejo_config.USER_ROLES_FILE_PATH)
+        self.role_definitions = deepcopy(self.default_role_definitions)
+        self.team_definitions = deepcopy(self.default_team_definitions)
+        self.forgejo_team_to_role_mapper = ForgejoTeamRoleMapper(role_definitions=self.role_definitions)
     
     def _get_forgejo_labels(self, owner: str, repo: str) -> List[Label]:
         """get labels for a repository"""
@@ -115,111 +237,44 @@ class ForgejoMigrator:
             return existing_labels
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to load existing labels for project {repo}! {detail}")
+            fg_print.error(f"Failed to retrieve existing labels for project {repo}! {detail}")
             return []
 
+    
+    def load_roles(self, path: str) -> tuple[dict[ForgejoRepositoryRole,ForgejoRolePermissionDefinition],
+                                             dict[ForgejoRepositoryRole,ForgejoTeamDefinition]]:
+        with open(path) as f:
+            cfg = yaml.safe_load(f)
 
-
-    def  _build_team_definitions(self) -> Dict[CanonicalRepositoryRole|str,ForgejoTeamDefinition]:
-        team_definitions : Dict[CanonicalRepositoryRole|str,ForgejoTeamDefinition] = {}
-        for role in CanonicalRepositoryRole:
-            match role:
-                case CanonicalRepositoryRole.OWNER:
-                    team_definitions[role] = ForgejoTeamDefinition(
-                                                    name=self.forgejo_migration_config.ORG_TEAM_OWNERS_NAME,
-                                                    description=self.forgejo_migration_config.ORG_TEAM_OWNERS_DESCRIPTION,
-                                                    permissions=self.role_definitions[role]
-                                                )
-                case CanonicalRepositoryRole.MAINTAINER:
-                    team_definitions[role] = ForgejoTeamDefinition(
-                                                    name=self.forgejo_migration_config.ORG_TEAM_MAINTAINERS_NAME,
-                                                    description=self.forgejo_migration_config.ORG_TEAM_MAINTAINERS_DESCRIPTION,
-                                                    permissions=self.role_definitions[role]
-                                                )
-                case CanonicalRepositoryRole.DEVELOPER:
-                    team_definitions[role] = ForgejoTeamDefinition(
-                                                    name=self.forgejo_migration_config.ORG_TEAM_DEVELOPERS_NAME,
-                                                    description=self.forgejo_migration_config.ORG_TEAM_DEVELOPERS_DESCRIPTION,
-                                                    permissions=self.role_definitions[role]
-                                                )
-                case CanonicalRepositoryRole.REPORTER:
-                    team_definitions[role] = ForgejoTeamDefinition(
-                                                    name=self.forgejo_migration_config.ORG_TEAM_REPORTERS_NAME,
-                                                    description=self.forgejo_migration_config.ORG_TEAM_REPORTERS_DESCRIPTION,
-                                                    permissions=self.role_definitions[role]
-                                                )
-                case CanonicalRepositoryRole.GUEST:
-                    team_definitions[role] = ForgejoTeamDefinition(
-                                                    name=self.forgejo_migration_config.ORG_TEAM_GUESTS_NAME,
-                                                    description=self.forgejo_migration_config.ORG_TEAM_GUESTS_DESCRIPTION,
-                                                    permissions=self.role_definitions[role]
-                                                )
-                case CanonicalRepositoryRole.UNKNOWN:
-                    # Do nothing, this is a special role for when parsing an existing Forgejo User/Team when an
-                    # exact mapping back to one of these ForgejoRolePermissionDefinition isn't possible
-                    pass
-                case _:
-                    raise Exception(f"No Forgejo Team Definition mapping for Role {role}")   
-        return team_definitions
-        
-
-
-    def _build_role_definitions(self) -> Dict[CanonicalRepositoryRole|str,ForgejoRolePermissionDefinition]:
         role_definitions = {}
-        for role in CanonicalRepositoryRole:
-            match role:
-                case CanonicalRepositoryRole.OWNER:
-                    role_definitions[role] = ForgejoRolePermissionDefinition(
-                                                    role=role,
-                                                    permission="admin", # Not supported
-                                                    units_map= { "repo.actions": "write", "repo.code": "write", "repo.ext_issues": "read", 
-                                                                 "repo.ext_wiki": "admin", "repo.issues": "write", "repo.packages": "write", 
-                                                                 "repo.projects": "write", "repo.pulls": "owner", "repo.releases": "write", 
-                                                                 "repo.wiki": "admin" }
-                                                )
-                case CanonicalRepositoryRole.MAINTAINER:
-                    role_definitions[role] = ForgejoRolePermissionDefinition(
-                                                    role=role,
-                                                    permission="admin",
-                                                    units_map= { "repo.actions": "write", "repo.code": "write", "repo.ext_issues": "read", 
-                                                                "repo.ext_wiki": "admin", "repo.issues": "write", "repo.packages": "write", 
-                                                                "repo.projects": "write", "repo.pulls": "owner", "repo.releases": "write", 
-                                                                "repo.wiki": "admin" }
-                                                )
-                case CanonicalRepositoryRole.DEVELOPER:
-                    role_definitions[role] = ForgejoRolePermissionDefinition(
-                                                    role=role,
-                                                    permission="write",
-                                                    units_map= { "repo.actions": "read", "repo.code": "write", "repo.ext_issues": "read", 
-                                                                "repo.ext_wiki": "read", "repo.issues": "write", "repo.packages": "write", 
-                                                                "repo.projects": "read", "repo.pulls": "owner", "repo.releases": "write", 
-                                                                "repo.wiki": "write" }
-                                                )
-                case CanonicalRepositoryRole.REPORTER:
-                    role_definitions[role] = ForgejoRolePermissionDefinition(
-                                                    role=role,
-                                                    permission="read",
-                                                    units_map= { "repo.actions": "none", "repo.code": "read", "repo.ext_issues": "read", 
-                                                                "repo.ext_wiki": "read", "repo.issues": "write", "repo.packages": "none", 
-                                                                "repo.projects": "none", "repo.pulls": "none", "repo.releases": "none", 
-                                                                "repo.wiki": "none" }
-                                                )
-                case CanonicalRepositoryRole.GUEST:
-                    role_definitions[role] = ForgejoRolePermissionDefinition(
-                                                    role=role,
-                                                    permission="read",
-                                                    units_map= { "repo.actions": "none", "repo.code": "read", "repo.ext_issues": "none", 
-                                                                "repo.ext_wiki": "none", "repo.issues": "read", "repo.packages": "read", 
-                                                                "repo.projects": "read", "repo.pulls": "read", "repo.releases": "read", 
-                                                                "repo.wiki": "read" }
-                                                )
-                case CanonicalRepositoryRole.UNKNOWN:
-                    # Do nothing, this is a special role for when parsing an existing Forgejo User/Team when an
-                    # exact mapping back to one of these ForgejoRolePermissionDefinition isn't possible
-                    pass
-                case _:
-                    raise Exception(f"No Forgejo Role Definition mapping for Role {role}")
-        return role_definitions
+        team_definitions = {}
+
+        for role_id, role_cfg in cfg["roles"].items():
+            role = ForgejoRepositoryRole(role_id)
+
+            cfg_permission = role_cfg.get("permission", "").strip() # Trim whitespace just in case
+            permissions = ForgejoRolePermissionDefinition(
+                role=role,
+                can_create_org_repo=role_cfg.get("can_create_org_repo", False),
+                includes_all_repositories=role_cfg.get("includes_all_repositories", False),
+                permission=cfg_permission,
+                units_map=role_cfg["units_map"],
+            )
+
+            cfg_name = role_cfg.get("team_name", "").strip() # Trim whitespace just in case
+            cfg_desc = role_cfg.get("team_description", "").strip() # Trim whitespace just in case
+            
+            team = ForgejoTeamDefinition(
+                name=cfg_name,
+                description=cfg_desc,
+                permissions=permissions,
+            )
+
+            role_definitions[role] = permissions
+            team_definitions[role] = team
+
+        return role_definitions, team_definitions
+
     
 
     def get_forgejo_milestones(self, owner: str, repo: str) -> List[Milestone]:
@@ -230,7 +285,7 @@ class ForgejoMigrator:
             return existing_milestones
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to load existing milestones for project {repo}! {detail}")
+            fg_print.error(f"Failed to retrieve existing milestones for project {repo}! {detail}")
             return []
 
 
@@ -243,11 +298,17 @@ class ForgejoMigrator:
             return existing_issues
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to load existing issues for project {repo}! {detail}")
+            fg_print.error(f"Failed to retrieve existing issues for project {repo}! {detail}")
             return []
 
     def is_owner_group(self, team:CanonicalTeam) -> bool:
          return team.source_access_level == self.forgejo_config.FORGEJO_DEFAULT_OWNERS_TEAM_NAME
+
+
+    def get_desired_owners_team_name(self) -> str:
+        #TODO this is dangerous now we allow users to define their own role IDs in the yaml file.
+        return self.team_definitions[ForgejoRepositoryRole("OWNER")].name
+
 
     def get_default_owners_team_name(self) -> str:
         return self.forgejo_config.FORGEJO_DEFAULT_OWNERS_TEAM_NAME
@@ -261,7 +322,7 @@ class ForgejoMigrator:
             return existing_teams
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to load existing teams for organization {org_name}! {detail}")
+            fg_print.error(f"Failed to retrieve existing teams for organization {org_name}! {detail}")
             return []
         
 
@@ -274,7 +335,7 @@ class ForgejoMigrator:
             return members
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to load team members for team {team.name} {detail}")
+            fg_print.error(f"Failed to retrieve team members for team {team.name} {detail}")
             return []
 
 
@@ -287,7 +348,7 @@ class ForgejoMigrator:
             return collaborators
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to load collaborators for repo {repo} {detail}")
+            fg_print.error(f"Failed to retrieve collaborators for repo {repo} {detail}")
             return []
 
 
@@ -300,7 +361,7 @@ class ForgejoMigrator:
             return keys
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to load public keys for user {username}! {detail}")
+            fg_print.error(f"Failed to retrieve public keys for user {username}! {detail}")
         return []
 
     def get_forgejo_user_gpg_keys(self, username : str) -> List[GpgKey] :
@@ -311,7 +372,7 @@ class ForgejoMigrator:
             return keys
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to load gpg keys for user {username}! {detail}")
+            fg_print.error(f"Failed to retrieve gpg keys for user {username}! {detail}")
             
         return []
 
@@ -320,13 +381,13 @@ class ForgejoMigrator:
     def get_forgejo_organization(self, repo: CanonicalRepo, org_name: str) -> Organization:
         
         try:
-            #fg_print.info(f"Trying to load forgejo organization {possible_org} for gitlab project {project.name}...")
+            #fg_print.debug(f"Trying to load forgejo organization {possible_org} for gitlab project {project.name}...")
             org = self.fg_api.organization.org_get(org_name)
-            fg_print.info(f"loaded organization {org.full_name} for {repo.source_system} {repo.source_type} {repo.name}!")
+            fg_print.debug(f"Loaded organization {org.full_name} for {repo.source_system} {repo.source_type} {repo.name}!")
             return org
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to load forgejo organization {org_name} for repo {repo.get_safe_name()} using {repo.source_system} {repo.source_type} {repo.name}! {detail}")
+            fg_print.error(f"Failed to retrieve forgejo organization {org_name} for repo {repo.get_safe_name()} using {repo.source_system} {repo.source_type} {repo.name}! {detail}")
         return None
 
 
@@ -335,11 +396,11 @@ class ForgejoMigrator:
         """get user by name"""
         try:
             user = self.fg_api.user.get(username)
-            fg_print.info(f"loaded user {user.username}!")
+            fg_print.debug(f"loaded user {user.username}!")
             return user
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to load user {username}! {detail}")
+            fg_print.error(f"Failed to retrieve Forgejo user {username}! {detail}")
         return None
 
 
@@ -348,7 +409,7 @@ class ForgejoMigrator:
         """check if a user exists"""
         try:
             user = self.fg_api.user.get(username)
-            fg_print.warning(f"User {username} already exists in Forgejo, skipping!")
+            fg_print.warning(f"User {user.login}, (name {user.full_name}) already exists in Forgejo, skipping!")
             return True
         except NotFoundError:
             return False
@@ -356,6 +417,20 @@ class ForgejoMigrator:
             detail = self._get_exception_detail(e)
             fg_print.info(f"User {username} not found in Forgejo, importing! {detail}")
             return False
+
+
+
+    def list_forgejo_organizations(self) -> List[Organization]:
+        """list all organizations in Forgejo"""
+        try:
+            orgs = self.fg_api.organization.org_get_all()
+            fg_print.debug(f"Loaded {len(orgs)} organizations from Forgejo!")
+            return orgs
+        except Exception as e:
+            detail = self._get_exception_detail(e)
+            fg_print.error(f"Failed to list organizations in Forgejo! {detail}")
+            return []
+
 
 
     @deprecated("working, but Not used")
@@ -421,24 +496,24 @@ class ForgejoMigrator:
 
 
 
-    def forgejo_repo_exists(self, owner_username: str, repo: str) -> bool:
+    def forgejo_repo_exists(self, owner_username: str, repo: CanonicalRepo) -> bool:
         """check if a repository exists"""
         try:
-            fg_print.info(f"Checking if project {repo} exists in Forgejo for owner {owner_username}...")
-            repository = self.fg_api.repository.repo_get(owner=owner_username, repo=repo)
+            fg_print.debug(f"Checking if Repository {repo.get_safe_name()} exists in Forgejo for owner {owner_username} to match {repo.source_system} {repo.source_type}...")
+            repository = self.fg_api.repository.repo_get(owner=owner_username, repo=repo.get_safe_name())
             if repository is not None:
-                fg_print.warning(f"Project {repo} already exists in Forgejo, skipping!")
+                fg_print.warning(f"{repo.source_type} {repo.name} already exists in Forgejo, skipping!")
                 return True
         except Exception as e:
             if isinstance(e, NotFoundError):
-                fg_print.info(f"Project {repo} not found in Forgejo, importing!")
+                fg_print.info(f"{repo.source_type} {repo.name} not found in Forgejo, importing!")
                 return False
             else:
                 detail = self._get_exception_detail(e)
-                fg_print.error(f"Failed to check if project {repo} exists in Forgejo for owner {owner_username}! {detail}")
+                fg_print.error(f"Failed to check if {repo.source_type} {repo.name} exists in Forgejo for owner {owner_username}! {detail}")
 
         
-        fg_print.info(f"Project {repo} not found in Forgejo, importing!")
+        fg_print.info(f"{repo.source_type} {repo.name} not found in Forgejo, importing!")
         return False
 
 
@@ -521,39 +596,38 @@ class ForgejoMigrator:
 
 
 
-    def _forgejo_delete_collaborator(self, repo: CanonicalRepo, collaborator_name: str) -> bool:
+    def _forgejo_delete_collaborator(self, repo: CanonicalRepo, collaborator_username: str) -> bool:
         """delete a collaborator from a repository"""
         try:
             self.fg_api.repository.repo_delete_collaborator(owner = repo.get_safe_owner_name(), 
                                                             repo = repo.get_safe_name(), 
-                                                            collaborator = collaborator_name)
-            fg_print.info(f"Collaborator {collaborator_name} deleted!")
+                                                            collaborator = collaborator_username)
+            fg_print.debug(f"User {collaborator_username} removed as collaborator from repository {repo.get_safe_name()}")
         except Exception as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
-                    f"Collaborator {collaborator_name} delete failed: {detail}",
-                    f"Collaborator {collaborator_name} delete from {repo}, skipping!: {detail}"
-                )
+                    f"User {collaborator_username} removal as collaborator from repository {repo.get_safe_name()} failed: {detail}")
             return False
         return True
 
 
 
-    def forgejo_add_replace_collaborator(self,
-                                        existing_collaborator_ids:set[int], 
-                                        collaborator_name:str,
-                                        collaborator_id:int,
-                                        repo:CanonicalRepo, permissions:str):
+    def forgejo_add_replace_collaboration(self,
+                                        existing_collaboration_records:dict[int,list[CreateTeamOptionPermission]],
+                                        user:User,
+                                        repo:CanonicalRepo, permissions:CreateTeamOptionPermission):
         """Add collaboration entry for repo. Will replace any existing one matching the name provided"""
         # If there is an existing collaboration record, delete it.
-        if collaborator_id in existing_collaborator_ids:
+        if permissions in existing_collaboration_records.get(user.id, []):
+
+            fg_print.warning(f"Collaboration record for user {user.login} already exists in repository {repo.get_safe_name()}, replacing with new permissions...")
             deleted = self._forgejo_delete_collaborator(repo=repo,
-                                                    collaborator_name=collaborator_name)
+                                                    collaborator_username=user.login)
             if not deleted:
                 return False
         # Add new collaboration record for user
-        added = self._forgejo_add_collaborator(repo=repo, 
-                                                collaborator_name=collaborator_name,
+        added = self._forgejo_add_collaboration(repo=repo, 
+                                                collaborator_username=user.login,
                                                 permission=permissions)
         if not added:
             pass
@@ -561,20 +635,18 @@ class ForgejoMigrator:
 
 
 
-    def _forgejo_add_collaborator(self, repo: CanonicalRepo, collaborator_name: str, permission: str) -> bool:
+    def _forgejo_add_collaboration(self, repo: CanonicalRepo, collaborator_username: str, permission: str) -> bool:
         """add a collaborator to a repository"""
         try:
             self.fg_api.repository.repo_add_collaborator(owner = repo.get_safe_owner_name(), 
                                                         repo = repo.get_safe_name(), 
-                                                        collaborator = collaborator_name, 
+                                                        collaborator = collaborator_username, 
                                                         permission = permission)
-            fg_print.info(f"Collaborator {collaborator_name} imported!")
+            fg_print.debug(f"Collaboration on {repo.get_safe_name()} for user {collaborator_username} recorded!")
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(
-                    f"Collaborator name={collaborator_name} import failed: {detail}",
-                    f"Collaborator name={collaborator_name} import failed {repo}, skipping!: {detail}"
-                )
+            fg_print.error(f"Failed to add Collaboration for user {collaborator_username} on {repo.get_safe_name()}: {detail}",
+                           f"Failed to add Collaboration for user {collaborator_username} on {repo.get_safe_name()}")
             return False
         # return true even if the collaborator already exists in the repository, because the existence of the collaborator in the repository is not a failure for the import of the project, we just skip it and continue with the import of the other collaborators
         return True
@@ -603,8 +675,8 @@ class ForgejoMigrator:
                 return True # already exists
             except Exception as e:
                 detail = self._get_exception_detail(e)
-                fg_print.error(f"Adding User {user.username} as {user.get_safe_username()} failed: {detail}",
-                                f"failed to import user {user.username} as {user.get_safe_username()} in Forgejo: {detail}",
+                fg_print.error(f"Failed to import {user.source_system} user {user.username} as {user.get_safe_username()}: {detail}",
+                                f"Failed to import {user.source_system} user {user.username} as {user.get_safe_username()}",
                 )
                 return False
         return True
@@ -664,7 +736,7 @@ class ForgejoMigrator:
 
 
     def _build_forgejo_sudo_request_options(self, username:str) -> RequestOptions :
-        headers : Dict = { "Sudo" : username }
+        headers : dict = { "Sudo" : username }
         request_options : RequestOptions = RequestOptions(additional_headers=headers)
         return request_options
 
@@ -711,7 +783,7 @@ class ForgejoMigrator:
 
 
     @deprecated("This cannot be used to create api tokens when the API was authorised using an access token")
-    def forgejo_add_temp_api_token_for_user(self, username:str, token_name:str, desired_scopes:Dict[str] = None) -> str:
+    def forgejo_add_temp_api_token_for_user(self, username:str, token_name:str, desired_scopes:dict[str] = None) -> str:
         """Create an Access Token for the user (if using sudo)"""
         #Example desired_scopes=["read:user","write:user"]
         # A full list is here: https://forgejo.org/docs/latest/user/token-scope/
@@ -732,9 +804,11 @@ class ForgejoMigrator:
 
 
 
-    def forgejo_add_organization(self, organization: CanonicalOrganization) -> bool:
+    def forgejo_add_organization(self, organization: CanonicalOrganization, existing_forgejo_org:Organization|None) -> bool:
         """add a group as organization in Forgejo"""
-        if not self.forgejo_organization_exists(orgname=organization.get_safe_username()): # need this because status 422 returned for conflict, not 409 
+        # need this pre-existance check because status 422 returned for conflict, not 409 
+        #if not self.forgejo_organization_exists(orgname=organization.get_safe_username()):
+        if existing_forgejo_org is None:
             try:
                 self.fg_api.organization.org_create(
                     description=organization.description,
@@ -750,7 +824,7 @@ class ForgejoMigrator:
                 detail = self._get_exception_detail(e)
                 fg_print.error(
                     f"Adding {organization.source_type} {organization.username} as Organization {organization.get_safe_username()} failed: {detail}",
-                    f"failed to import {organization.source_type} {organization.username}: {detail}",
+                    f"Adding {organization.source_type} {organization.username} as Organization {organization.get_safe_username()} failed",
                 )
                 return False
         # return true even if the organization already exists, because the existence of the organization is not a failure for the import of the group, we just skip it and continue with the import of the group members and projects
@@ -775,8 +849,8 @@ class ForgejoMigrator:
         except Exception as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
-                f"Adding team {definition.name} to organization {org_name} import failed: {detail}",
-                f"Failed to add team {definition.name} to organization {org_name} in Forgejo: {detail}",
+                f"Failed to add team {definition.name} to organization {org_name}: {detail}",
+                f"Failed to add team {definition.name} to organization {org_name}",
             )
             return None
 
@@ -790,8 +864,8 @@ class ForgejoMigrator:
         except Exception as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
-                f"Adding user {username} to team {team.name} of organization {organization_name} import failed: {detail}",
-                f"Failed to add member {username} to team {team.name} for organization {organization_name} in Forgejo: {detail}",
+                f"Failed to add member {username} to team {team.name} of organization {organization_name}: {detail}",
+                f"Failed to add member {username} to team {team.name} for organization {organization_name}",
             )
             return False
         return True
@@ -824,25 +898,25 @@ class ForgejoMigrator:
             
 
 
-    def forgejo_update_organization_team(self, team:Team, definition:ForgejoTeamDefinition) -> Team | None :
+    def forgejo_update_organization_team(self, team:Team, current_definition:ForgejoTeamDefinition, new_definition:ForgejoTeamDefinition) -> Team | None :
         """Rename a Forgejo Team (e.g. Owners)"""
         try:
             updated = self.fg_api.organization.org_edit_team(id=team.id,
-                                                        name=definition.name,
-                                                        can_create_org_repo=definition.permissions.can_create_org_repo, 
-                                                        description=definition.description,
-                                                        includes_all_repositories=definition.permissions.includes_all_repositories,
-                                                        permission=definition.permissions.permission,
-                                                        units=list(definition.permissions.units_map.keys()),
-                                                        units_map=definition.permissions.units_map
+                                                        name=new_definition.name,
+                                                        can_create_org_repo=new_definition.permissions.can_create_org_repo, 
+                                                        description=new_definition.description,
+                                                        includes_all_repositories=new_definition.permissions.includes_all_repositories,
+                                                        permission=new_definition.permissions.permission,
+                                                        units=list(new_definition.permissions.units_map.keys()),
+                                                        units_map=new_definition.permissions.units_map
                                                         )
-            changes = ForgejoTeamDefinition.fromTeam(team).diff(definition)
+            changes = current_definition.diff(new_definition)
             fg_print.info(f"Updated Forgejo team {team.name} changes: {changes}")
             return updated
         except Exception as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
-                f"Update Forgejo {team.name} to {definition} failed: {detail}",
+                f"Update Forgejo Team {team.name} to {new_definition} failed: {detail}",
                 f"Failed to update team {team.name} in Forgejo {detail}",
             )
             return None
@@ -859,17 +933,17 @@ class ForgejoMigrator:
             detail = str(e)
         return detail
 
-    def addTeamMapping(self, map_from_str:str, to_role:CanonicalRepositoryRole):
+    def addTeamMapping(self, map_from_role:ForgejoRepositoryRole, to_role:ForgejoRepositoryRole):
         """Add a custom team mapping for an access level not explicitly defined in Forgejo  but encountered during migration"""
         new_team = deepcopy(self.team_definitions[to_role])
-        new_team.name=map_from_str
+        new_team.name=map_from_role
         new_team.description="Temporary team for grouping collaborators with unmapped source access permission"
-        self.team_definitions[map_from_str]=new_team
+        self.team_definitions[map_from_role]=new_team
     
-    def addRoleMapping(self, map_from_str:str, to_role:CanonicalRepositoryRole):
+    def addRoleMapping(self, map_from_role:ForgejoRepositoryRole, to_existing_role:ForgejoRepositoryRole):
         """Add a custom user role mapping for an access level not explicitly defined in Forgejo  but encountered during migration.
             Note that the default Forgejo permissions values in here are used for both team and user of same role"""
-        new_role_permissions_definition = deepcopy(self.role_definitions[to_role])
-        new_role_permissions_definition.name=map_from_str
+        new_role_permissions_definition = deepcopy(self.role_definitions[to_existing_role])
+        new_role_permissions_definition.name=map_from_role.id
         new_role_permissions_definition.description="Temporary Role for collaborators with unmapped source access permission"
-        self.role_definitions[map_from_str]=new_role_permissions_definition
+        self.role_definitions[ForgejoRepositoryRole]=new_role_permissions_definition
