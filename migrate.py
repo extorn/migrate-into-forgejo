@@ -22,14 +22,7 @@ import configparser
 import typing
 
 from docopt import docopt
-import requests
-from httpx import Client as HttpxClient
 
-import gitlab  # pip install python-gitlab
-import gitlab.v4.objects
-import pyforgejo  # pip install pyforgejo (https://github.com/h44z/pyforgejo)
-
-from pyforgejo import PyforgejoApi
 
 from fg_migration.migration_source_type import MigrationSource
 from fg_migration.config_types import ForgejoConfig, GitLabConfig, GitLabMigrationConfig, MigrationConfig
@@ -38,8 +31,9 @@ from fg_migration.gitlab import GitLabMigrationSource
 from fg_migration.migrator import Migrator
 
 from fg_migration import fg_print
+from fg_migration.utils import _build_forgejo_api_client, _build_gitlab_api_client, _test_forgejo_connection
 
-SCRIPT_VERSION = "0.5"
+SCRIPT_VERSION = "1.0.0-alpha.1"
 
 
 
@@ -73,34 +67,12 @@ def main():
     fg_print.info(f"Version: {SCRIPT_VERSION}\n")
     
 
-    session = requests.Session()
-    # add client authentication if cert and key are provided in the config
-    if(gitlab_config.GITLAB_CLIENT_AUTH_CERT != None and gitlab_config.GITLAB_CLIENT_AUTH_KEY != None):
-        cert_path = gitlab_config.GITLAB_CLIENT_AUTH_CERT
-        key_path = gitlab_config.GITLAB_CLIENT_AUTH_KEY
-        session.cert = (cert_path, key_path)
-    # private token or personal token authentication
-    gl = gitlab.Gitlab(url = gitlab_config.GITLAB_URL, private_token=gitlab_config.GITLAB_TOKEN, session=session)
-    try:
-        gl.auth()
-    except gitlab.GitlabAuthenticationError:
-        fg_print.error("Failed to authenticate with GitLab! Check access token and client authentication settings in .migrate.ini")
-        os.sys.exit()
-    except Exception as e:
-        fg_print.error(f"Failed to connect to GitLab! {e}")
-        os.sys.exit()
-    assert isinstance(gl.user, gitlab.v4.objects.CurrentUser)
-    fg_print.info(f"Connected to GitLab, version: {gl.version()[0]}")
+    gl = _build_gitlab_api_client(gitlab_config)
 
     fg = _build_forgejo_api_client(forgejo_config)
-    try:
-        response = fg.miscellaneous.get_version()
-    except Exception as e:
-        fg_print.error(f"Failed to connect to Forgejo! {e}")
-        os.sys.exit()
-    fg_ver = response.version
+
+    _test_forgejo_connection(fg_api=fg)
     
-    fg_print.info(f"Connected to Forgejo, version: {fg_ver}")
 
     migration_source : MigrationSource = GitLabMigrationSource(gitlab_api=gl, gitlab_config=gitlab_config, gitlab_migration_config=migration_config_gitlab)
     migration_dest : ForgejoMigrator = ForgejoMigrator(fg_api=fg, forgejo_config=forgejo_config)
@@ -143,19 +115,6 @@ def main():
 # Data loading helpers for Forgejo
 #
 
-def _build_httpx_client(config: ForgejoConfig, timeout: typing.Optional[float]=60, follow_redirects: typing.Optional[bool] = True) -> HttpxClient:
-    client = None
-    if(config.FORGEJO_CLIENT_AUTH_CERT != None and config.FORGEJO_CLIENT_AUTH_KEY != None):
-        cert_path = config.FORGEJO_CLIENT_AUTH_CERT
-        key_path = config.FORGEJO_CLIENT_AUTH_KEY
-        cert = (cert_path, key_path)
-        client = HttpxClient(cert=cert, timeout=timeout,follow_redirects=follow_redirects)
-    return client
-
-
-
-def _build_forgejo_api_client(config: ForgejoConfig) -> pyforgejo.PyforgejoApi:
-    return PyforgejoApi(base_url=config.FORGEJO_API_URL, api_key=config.FORGEJO_API_TOKEN, httpx_client = _build_httpx_client(config=config))
 
 
 

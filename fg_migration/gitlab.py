@@ -130,9 +130,11 @@ class GitLabMigrationSource(MigrationSource):
             owner_name = self._get_gitlab_project_owner_slug(project)
             is_individual = self._get_is_individual(project)
             clone_url = project.web_url
-            #TODO check clone url set correctly if SSH and or HTTPS clone mode
-            if self.gitlab_config.GITLAB_ADMIN_PASS == "" and self.gitlab_config.GITLAB_ADMIN_USER == "":
-                clone_url = project.http_url_to_repo
+            repo_name = self._get_gitlab_repo_name(project)
+            if repo_name is None:
+                fg_print.error(f"Could not extract repository name for project {project.name} with path {project.path_with_namespace}, skipping import!")
+                continue
+            clone_url = self._build_gitlab_repo_url(owner_name, repo_name)
             
             is_private = (project.visibility == "private" or project.visibility == "internal")
             auth_password=self.gitlab_config.GITLAB_ADMIN_PASS
@@ -149,6 +151,30 @@ class GitLabMigrationSource(MigrationSource):
             
         return repos
     
+
+
+    def _get_gitlab_repo_name(self, project: gitlab.v4.objects.Project) -> str|None:
+        proj_path = project.path_with_namespace
+
+        fg_print.info(f"Project: {proj_path}")
+
+        path_parts = proj_path.split("/", 1)
+
+        if len(path_parts) != 2:
+            fg_print.error(
+                f"Invalid repository path: {proj_path}"
+            )
+            return None
+        return path_parts[1]
+    
+    
+    
+    def _build_gitlab_repo_url(self, owner: str, repo: str) -> str:
+        if self.gitlab_config.GITLAB_SYNC_CONNECTION_TYPE == "ssh":
+            return f"git@{self.gitlab_config.GITLAB_URL.replace('https://', '').replace('http://', '')}:{owner}/{repo}.git"
+        else:
+            return f"{self.gitlab_config.GITLAB_URL}/{owner}/{repo}.git"
+        
 
 
     @override
