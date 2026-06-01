@@ -54,6 +54,9 @@ def main():
 
     _args = docopt(__doc__)
     args = {k.replace("--", ""): v for k, v in _args.items()}
+    # control debug logging
+    if args["debug"]:
+        fg_print.IS_DEBUG=True
 
     fg_print.print_color(
         fg_print.Bcolors.HEADER,

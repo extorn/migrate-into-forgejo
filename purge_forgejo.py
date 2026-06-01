@@ -70,16 +70,22 @@ def ask_confirmation() -> None:
 if __name__ == "__main__":
 
     args = docopt(__doc__)
+    # control debug logging
+    if args["--debug"]:
+        fg_print.IS_DEBUG=True
+    
     if not any([args["--orgs-repos"], args["--orgs"], 
                 args["--user-repos"], args["--current-user-repos"], 
                 args["--users"]]):
         fg_print.error("Please specify what to delete! You can use --help for more information.")
         os.sys.exit()
 
+
     ask_confirmation()
 
     fg_api = _build_forgejo_api_client(config=forgejo_config)
     purger = ForgejoPurger(fg_api=fg_api, forgejo_config=forgejo_config)
+
 
     if args["--orgs-repos"]:
         purger.del_orgs_repos()

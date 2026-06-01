@@ -3,6 +3,7 @@ from abc import abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field
 import os
+from pprint import pformat
 import random
 import re
 import string
@@ -147,7 +148,9 @@ class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
         fg_print.debug("\n".join(debug_log))
         fg_print.warning(
             f"No exact role match found for existing Forejo team {team.name}."
-            f"Closest role is {best_role}, but sought permission: {team.permission}, sought unit_map: {team.units_map}"
+            f"Closest role is {best_role}, "
+            f"but sought permission: {team.permission}, "
+            f"sought unit_map:\n{pformat(team.units_map)}"
         )
 
         role = best_role

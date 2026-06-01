@@ -60,6 +60,7 @@ class GitLabConfig:
     GITLAB_TOKEN : str | None
     GITLAB_ADMIN_USER : str | None
     GITLAB_ADMIN_PASS : str | None
+    GITLAB_SYNC_CONNECTION_TYPE : str | None
 
     @classmethod
     def from_config(cls, config:configparser.RawConfigParser, section:str="gitlab"):
@@ -70,6 +71,8 @@ class GitLabConfig:
             GITLAB_TOKEN = config.get(section, option="gitlab_token", fallback=None),
             GITLAB_ADMIN_USER = config.get(section, option="gitlab_admin_user", fallback=None),
             GITLAB_ADMIN_PASS = config.get(section, option="gitlab_admin_pass", fallback=None),
+            GITLAB_SYNC_CONNECTION_TYPE = config.get(section, option="gitlab_sync_connection_type", fallback="https"),
+            
         )
 
 

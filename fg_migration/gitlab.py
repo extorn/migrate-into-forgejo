@@ -1,4 +1,5 @@
 
+import os
 import re
 from typing import override
 
@@ -73,7 +74,7 @@ class GitLabMigrationSource(MigrationSource):
         if (username in self.gitlab_migration_config.IGNORED_GITLAB_SYSTEM_USERS or self.BOT_REGEX.match(username)):
             return True
         else:
-            fg_print.debug(f"username {username} not in ignored users list {self.gitlab_migration_config.IGNORED_GITLAB_SYSTEM_USERS} and does not match bot regex, will not ignore")
+            fg_print.debug(f"username {username} not in ignored users list {list(self.gitlab_migration_config.IGNORED_GITLAB_SYSTEM_USERS)} and does not match bot regex, will not ignore")
         return False
         
 
@@ -245,6 +246,7 @@ class GitLabMigrationSource(MigrationSource):
             # create an organization
             #We use the gitlab api Group username stored in name here not path because name is the displayed name.
             # We clean this up before using it in forgejo as a quasi identifier.
+            fg_print.debug(f"name={group.name} path={group.path} fullname={group.full_name}")
             this_org = CanonicalOrganization(source_type="Group", username=group.name, full_name=group.full_name, 
                                              description=group.description, teams=[
                                                                                     team
@@ -253,7 +255,8 @@ class GitLabMigrationSource(MigrationSource):
                                                                                 ],) # Note have to flatten the list of teams per access_level here.
             # add the org to the list
             organizations.members.append(this_org)
-            
+            if this_org.username is None:
+                os.sys.exit(1)
         return organizations
 
 

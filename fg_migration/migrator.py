@@ -499,7 +499,7 @@ class Migrator:
             team_key
         )
         if found is None:
-            fg_print.debug(f"No existing team matching {team_key} found in set !{existing_forgejo_teams_map.keys()}")
+            fg_print.debug(f"No existing team matching {team_key} found in set !{list(existing_forgejo_teams_map.keys())}")
         return found
     
     
@@ -577,9 +577,9 @@ class Migrator:
         existing_forgejo_org_teams_map : dict[str,Team] = {team.name.lower():team
                                   for team in self.migration_dest.get_forgejo_teams(org_name=organization.get_safe_username())
                                   if team.name is not None} # If a team is returned without a name, we can't use it anyway without inferring from permissions so lets just strip them out.
-        # list existing teams #TODO just noisy?
+        
         existing_forgejo_org_team_names = [team.name for team in existing_forgejo_org_teams_map.values()]
-        fg_print.info(f"Existing forgejo teams for Forgejo organization {organization.get_safe_username()} : {existing_forgejo_org_team_names}")
+        fg_print.debug(f"Existing forgejo teams for Forgejo organization {organization.get_safe_username()} : {existing_forgejo_org_team_names}")
         
         canonical_teams: list[CanonicalTeam] = organization.teams
         
@@ -649,7 +649,7 @@ class Migrator:
                 # that would be empty, to avoid creating lots of empty teams with no users in them)
                 
                 if team_def.name.lower() not in existing_forgejo_org_teams_map:
-                    fg_print.debug(f"Team {team_def.name.lower()} not in {existing_forgejo_org_teams_map.keys()}")
+                    fg_print.debug(f"Team {team_def.name.lower()} not in {list(existing_forgejo_org_teams_map.keys())}")
                     fg_print.info(f"Adding empty Team {team_def.name} to Organization {organization.get_safe_username()}")
                     forgejo_team = self.migration_dest.forgejo_add_organization_team(org_name=organization.get_safe_username(), definition=team_def)
 

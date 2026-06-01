@@ -17,7 +17,7 @@ class Bcolors:
     UNDERLINE = "\033[4m"
 
 
-IS_DEBUG:bool = True
+IS_DEBUG:bool = False
 
 
 def message(color, msg, colorend=Bcolors.ENDC, bold=False) -> str:

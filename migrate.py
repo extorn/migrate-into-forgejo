@@ -4,13 +4,14 @@
 # and collaborators from GitLab to Forgejo
 #
 """
-Usage: migrate.py [--users] [--groups] [--projects] [--all] [--notify]
+Usage: migrate.py [--debug] [--users] [--groups] [--projects] [--all] [--notify]
        migrate.py --help
 
 Migration script to import projects, users, groups, from GitLab to Forgejo.
 
 Options
   -h, --help  Show this screen
+  --debug     show extra debug output
   --users     migrate users
   --groups    migrate groups
   --projects  migrate projects
@@ -59,6 +60,9 @@ def main():
     """Main function"""
     _args = docopt(__doc__)
     args = {k.replace("--", ""): v for k, v in _args.items()}
+    # control debug logging
+    if args["debug"]:
+        fg_print.IS_DEBUG=True
 
     fg_print.print_color(
         fg_print.Bcolors.HEADER, "---=== GitLab to Forgejo migration ===---"

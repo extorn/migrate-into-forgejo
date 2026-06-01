@@ -95,8 +95,8 @@ gitlab_url = https://gitlab.example.com <http[s]://hostname[:port][/path]>
 gitlab_token = <your-gitlab-token>
 gitlab_admin_user = <gitlab-admin-user>
 gitlab_admin_pass = <your-gitlab-password>
-### Which protocol should git connect to gitlab using?
-#gitlab_sync_connection_type = https <ssh/https>
+### Which protocol should git connect to gitlab using? <ssh/https>
+#gitlab_sync_connection_type = https
 
 
 
