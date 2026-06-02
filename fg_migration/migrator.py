@@ -649,9 +649,12 @@ class Migrator:
                 # that would be empty, to avoid creating lots of empty teams with no users in them)
                 
                 if team_def.name.lower() not in existing_forgejo_org_teams_map:
-                    fg_print.debug(f"Team {team_def.name.lower()} not in {list(existing_forgejo_org_teams_map.keys())}")
-                    fg_print.info(f"Adding empty Team {team_def.name} to Organization {organization.get_safe_username()}")
-                    forgejo_team = self.migration_dest.forgejo_add_organization_team(org_name=organization.get_safe_username(), definition=team_def)
+                    if(team_def.allow_empty):
+                        fg_print.debug(f"Team {team_def.name.lower()} not in {list(existing_forgejo_org_teams_map.keys())}")
+                        fg_print.info(f"Adding empty Team {team_def.name} to Organization {organization.get_safe_username()}")
+                        forgejo_team = self.migration_dest.forgejo_add_organization_team(org_name=organization.get_safe_username(), definition=team_def)
+                    else:
+                        fg_print.debug(f"Skipping empty Team {team_def.name} of Organization {organization.get_safe_username()}")
 
 
 

@@ -10,6 +10,7 @@ roles:
     # This is the only group created by default by Forgejo.
     team_name: Owners
     team_description: Repository owners with full administrative access.
+    team_allow_empty: True
 
 
     can_create_org_repo: true
@@ -35,6 +36,7 @@ roles:
   MAINTAINER:
     team_name: Maintainers
     team_description: Repository maintainers with administrative privileges.
+    team_allow_empty: True
 
     can_create_org_repo: false
     includes_all_repositories: false
@@ -58,6 +60,7 @@ roles:
   DEVELOPER:
     team_name: Developers
     team_description: Developers with write access to repositories.
+    team_allow_empty: True
 
     can_create_org_repo: false
     includes_all_repositories: false
@@ -81,6 +84,7 @@ roles:
   REPORTER:
     team_name: Reporters
     team_description: Users who can report issues and provide feedback.
+    team_allow_empty: True
 
     can_create_org_repo: false
     includes_all_repositories: false
@@ -105,6 +109,7 @@ roles:
   GUEST:
     team_name: Guests
     team_description: Users with limited read-only access.
+    team_allow_empty: True
 
 
     can_create_org_repo: false

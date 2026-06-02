@@ -53,6 +53,7 @@ class ForgejoTeamDefinition:
     name: str
     description: str
     permissions: ForgejoRolePermissionDefinition
+    allow_empty: bool
 
     @staticmethod
     def fromTeam(team:Team, role_builder:ForgejoTeamRoleBuilder, require_exact:bool=False) -> ForgejoTeamDefinition:
@@ -257,7 +258,7 @@ class ForgejoMigrator:
         for role_id, role_cfg in cfg["roles"].items():
             role = ForgejoRepositoryRole(role_id)
 
-            cfg_permission = role_cfg.get("permission", "").strip() # Trim whitespace just in case
+            cfg_permission : CreateTeamOptionPermission = role_cfg.get("permission", "").strip() # Trim whitespace just in case
             permissions = ForgejoRolePermissionDefinition(
                 role=role,
                 can_create_org_repo=role_cfg.get("can_create_org_repo", False),
@@ -266,13 +267,15 @@ class ForgejoMigrator:
                 units_map=role_cfg["units_map"],
             )
 
-            cfg_name = role_cfg.get("team_name", "").strip() # Trim whitespace just in case
-            cfg_desc = role_cfg.get("team_description", "").strip() # Trim whitespace just in case
+            cfg_name : str = role_cfg.get("team_name", "").strip() # Trim whitespace just in case
+            cfg_desc : str = role_cfg.get("team_description", "").strip() # Trim whitespace just in case
+            cfg_allow_empty : bool = role_cfg.get("team_allow_empty", True) # Is this team permitted to be created when empty of users?
             
             team = ForgejoTeamDefinition(
                 name=cfg_name,
                 description=cfg_desc,
                 permissions=permissions,
+                allow_empty=cfg_allow_empty
             )
 
             role_definitions[role] = permissions
@@ -306,18 +309,26 @@ class ForgejoMigrator:
             fg_print.error(f"Failed to retrieve existing issues for project {repo}! {detail}")
             return []
 
+
+
+    @deprecated("probably delete this")
     def is_owner_group(self, team:CanonicalTeam) -> bool:
          return team.source_access_level == self.forgejo_config.FORGEJO_DEFAULT_OWNERS_TEAM_NAME
 
 
+
+    @deprecated("probably delete this")
     def get_desired_owners_team_name(self) -> str:
         #TODO this is dangerous now we allow users to define their own role IDs in the yaml file.
         return self.team_definitions[ForgejoRepositoryRole("OWNER")].name
 
 
+
+    @deprecated("Need to find some way of snagging users trying to change the Owners team name. Likely call this in function to rename team out of the way")
     def get_default_owners_team_name(self) -> str:
         return self.forgejo_config.FORGEJO_DEFAULT_OWNERS_TEAM_NAME
        
+
 
     def get_forgejo_teams(self, org_name: str) -> list[Team]:
         """get teams for an organization"""

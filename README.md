@@ -1,16 +1,16 @@
-# GitLab to Forgejo migration script
+# Any Source Control System to Forgejo migration script
+**Currently only gitlab support is implemented, but implementing support for others in a modular way is possible.
 
 # **WARNING:**
 
-**This is under active development (30/05/2026)**, I will remove this warning once I have tested it and it at least runs through a successful basic migration. I anticipate this  
-being in a few days or less.
+**This is under active development (30/05/2026)**,
 
 Ping me an email if you're interested in this code.
 
 Notes
 
-1.  _I have had this working with organization and teams importing, but am now coming towrds the end of a major refactoring exercise to make this work for any source system (you'd need to write just a small python class to pull data out of your source system of choice)._
-2.  _I am trying to keep this readme up to date as I go, but it is possible that it lags slightly; that will be addressed once I finish refactoring the code._
+1.  _I am trying to keep this readme up to date as I go, but it is possible that it lags slightly; that will be addressed once I finish refactoring the code._
+2. _My current task is to enable paging support both in Forgejo API calls and gitlab.
 
 ## Preamble
 
@@ -23,7 +23,7 @@ This script supports migration of:
 *   Groups
 *   Public SSH keys
 
-Tested with GitLab Version 17.2.1 and Forgejo Version 8.0.0
+Tested with GitLab Version 18.11 and Forgejo Version 15.0.2
 
 ## **Usage**
 
