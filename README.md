@@ -21,7 +21,10 @@ This script supports migration of:
 *   Repositories & Wiki (fork status is lost)
 *   Users (no profile pictures)
 *   Groups
-*   Public SSH keys
+*   Public SSH keys, PGP Keys
+
+*   It supports creation of repository Teams and collaborators with
+    roles defined to your configured specification, mapping users with any given source access level to those roles as you decide
 
 Tested with GitLab Version 18.11 and Forgejo Version 15.0.2
 
@@ -45,15 +48,22 @@ and you call the scripts using `--help`:
 *   `./migrate.py --help`
 *   `./create_push_mirrors.py --help`
 
-### **user\_roles.yaml**
+## Configuration Files
+
+### **forgejo_user_roles.yaml**
 
 This file contains a list of all supported roles within Forgejo as defined by this script (you are not limited to any number by Forgejo itself.
 
-Please alter the values in this file to match your personal configuration desires, I've tried to set what I thought looked reasonable to me, but I'm confident you may wish to change one two or all values.
+Please alter the values in this file to match your personal configuration desires, I've tried to set what I thought looked reasonable to me, but I'm confident you may wish to change any or all values. You can add as many roles as you wish or have as few as you wish with the caveat that there currently ***MUST*** be a role with a team named ***Owners***.
 
-The role Headings in CAPITAL LETTERS cannot be altered - these map the roles into this script.
+### **gitlab_forgejo_roles_map.yaml**
 
-### **ini file**
+This file contains a list of mappings from gitlab access levels to
+Forgejo roles as defined in the forgejo_user_roles.yaml file. Feel free
+to change the values in this, add more or delete them as you wish to match
+your requirements.
+
+### **.migrate.ini file**
 
 You need to create a configuration file called `.migrate.ini` and store it in the same directory of the script.  
 :bulb: `.migrate.ini` is listed in `.gitignore`.
@@ -153,16 +163,17 @@ This is a fork of https://github.com/GEANT/gitlab-to-forgejo.
 Changes:
 
 *   I've re-added support for issues, milestones and labels, though don't use these myself.
-*   I've added support for gitlab client certificate authentication
-*   I've added support for forgejo client certificate authentication
+*   I've added support for gitlab client certificate authentication (for when the server is behind a proxy enforcing this)
+*   I've added support for forgejo client certificate authentication (for when the server is behind a proxy enforcing this)
 *   I've updated this script to use the new API for forgejo (2.0+).
-*   I tried to make minimal changes initially, but in the end, I have refactored a bit, but the program flow remains intentionally identical. It would be fairy easy to refactor this further in to a series of classes, allowing future addition of any source system of your choice.
-*   Added support for user GPG key import, though don't use these myself.
+*   I tried to make minimal changes initially, but in the end, I have refactored it to the point it is now a reusable more modular migration engine
+*   Added support for user PGP and GPG key import, though don't use these myself.
 *   Added support for creating Organization Teams and Collaborators to match GitLab users based on gitlab access level.
 
 Note:
 
-*   I have added warnings where users are found that I think are likely to be gitlab system users. They are imported anyway, just in case, but you're made aware.
+*   I have added warnings where users are found that I think are likely to be gitlab system users. They are imported anyway, just in case, but you're made aware. You can choose to filter out gitlab system users from the migration.
 *   If a user fails to import, e.g. ghost is a reserved username in forgejo, then that doesn't stop the script trying to add that user to any groups / teams which makes for some logging noise
+*   I have not yet re-added support for custom import of labels, milestones since this is handled inside the core Forgejo migration of a repository.
 
 The parent was a fork of [gitlab\_to\_gitea](https://git.autonomic.zone/kawaiipunk/gitlab-to-gitea.git), with less features (this script does not import issues, milestones and labels)
