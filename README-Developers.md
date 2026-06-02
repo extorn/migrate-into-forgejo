@@ -19,4 +19,20 @@
 
 ### Scripts
 
-<table><tbody><tr><td><strong>File</strong></td><td><strong>Purpose</strong></td><td><strong>Notes</strong></td></tr><tr><td>.migrate.ini</td><td>a configuration file</td><td>This is created by the user based on the README.md and updated to match what the user desires to happen. It is git excluded so won't end up in the repository.</td></tr><tr><td>create_push_mirrors.py</td><td>script to control push mirror create/delete</td><td>Loads any config files into classes and then passes them into the requisite classes that do the work</td></tr><tr><td>forgejo_user_roles.yaml</td><td>defines Forgejo user roles</td><td>This is used to create any users, but also Teams within Forgejo during import. All names, descriptions, and permissions can be set as you wish, but be warned that I cannot get the Forgejo web interface to work properly without at least one team being named as "Owners" a present.</td></tr><tr><td>gitlab_forgejo_roles_map.yaml</td><td>maps gitlab access_level to Forgejo role</td><td>Any role mapping defined in this file must refer to a role defined in forgejo_user_roles.yaml. The migration script checks for this before anything starts</td></tr><tr><td>migrate.py</td><td>script to control migration into Forgejo</td><td>Loads any config files into classes and then passes them into the requisite classes that do the work</td></tr><tr><td>purge_forgejo.py</td><td>script to facilitate purging Forgejo of various items of data</td><td>This code was extracted from the orginal forked code in purge_forgejo.py. It has been updated to use the pyforge API, but not been tested</td></tr><tr><td>requirements.txt</td><td>defines python library requirements</td><td>Versions of libraries used can be defined here to ensure the code still compiles when external libraries are updated. Currently I've left it free to use any version available, pyforge excepting</td></tr></tbody></table>
+| **File** | **Purpose** | **Notes** |
+| --- | --- | --- |
+| .migrate.ini | a transient configuration file | This is created by the user based on the README.md and updated to match what the user desires to happen. It is git excluded so won't end up in the repository. |
+| create\_push\_mirrors.py | script to control push mirror create/delete | Loads any config files into classes and then passes them into the requisite classes that do the work |
+| forgejo\_user\_roles.yaml | defines Forgejo user roles | This is used to create any users, but also Teams within Forgejo during import. All names, descriptions, and permissions can be set as you wish, but be warned that I cannot get the Forgejo web interface to work properly without at least one team being named as "Owners" a present. |
+| gitlab\_forgejo\_roles\_map.yaml | maps gitlab access\_level to Forgejo role | Any role mapping defined in this file must refer to a role defined in forgejo\_user\_roles.yaml. The migration script checks for this before anything starts |
+| migrate.py | script to control migration into Forgejo | Loads any config files into classes and then passes them into the requisite classes that do the work |
+| purge\_forgejo.py | script to facilitate purging Forgejo of various items of data | This code was extracted from the orginal forked code in purge\_forgejo.py. It has been updated to use the pyforge API, but not been tested |
+| requirements.txt | defines python library requirements | Versions of libraries used can be defined here to ensure the code still compiles when external libraries are updated. Currently I've left it free to use any version available, pyforge excepting |
+
+## Adding support for a new Source System
+
+### Steps
+
+1.  Create a new file ./fg\_migration/\<my\_source\_system\_name>.py by copying and pasting migration\_source\_type.py
+2.  Rename the class header inside to class \<my\_source\_system\_name>MigrationSource(MigrationSource):
+3.  Implement each function as required. _Look to the gitlab.py as an example implementation_
