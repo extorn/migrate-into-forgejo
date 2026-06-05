@@ -403,7 +403,7 @@ class ForgejoMigrator:
             return org
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to retrieve forgejo organization {org_name} for repo {repo.get_safe_name()} using {repo.source_system} {repo.source_type} {repo.name}! {detail}")
+            fg_print.error(f"Failed to retrieve forgejo organization {org_name} for repo {repo.get_safe_username()} using {repo.source_system} {repo.source_type} {repo.name}! {detail}")
         return None
 
 
@@ -515,8 +515,8 @@ class ForgejoMigrator:
     def forgejo_repo_exists(self, owner_username: str, repo: CanonicalRepo) -> bool:
         """check if a repository exists"""
         try:
-            fg_print.debug(f"Checking if Repository {repo.get_safe_name()} exists in Forgejo for owner {owner_username} to match {repo.source_system} {repo.source_type}...")
-            repository = self.fg_api.repository.repo_get(owner=owner_username, repo=repo.get_safe_name())
+            fg_print.debug(f"Checking if Repository {repo.get_safe_username()} exists in Forgejo for owner {owner_username} to match {repo.source_system} {repo.source_type}...")
+            repository = self.fg_api.repository.repo_get(owner=owner_username, repo=repo.get_safe_username())
             if repository is not None:
                 fg_print.warning(f"{repo.source_type} {repo.name} already exists in Forgejo, skipping!")
                 return True
@@ -616,13 +616,13 @@ class ForgejoMigrator:
         """delete a collaborator from a repository"""
         try:
             self.fg_api.repository.repo_delete_collaborator(owner = repo.get_safe_owner_name(), 
-                                                            repo = repo.get_safe_name(), 
+                                                            repo = repo.get_safe_username(), 
                                                             collaborator = collaborator_username)
-            fg_print.debug(f"User {collaborator_username} removed as collaborator from repository {repo.get_safe_name()}")
+            fg_print.debug(f"User {collaborator_username} removed as collaborator from repository {repo.get_safe_username()}")
         except Exception as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
-                    f"User {collaborator_username} removal as collaborator from repository {repo.get_safe_name()} failed: {detail}")
+                    f"User {collaborator_username} removal as collaborator from repository {repo.get_safe_username()} failed: {detail}")
             return False
         return True
 
@@ -636,7 +636,7 @@ class ForgejoMigrator:
         # If there is an existing collaboration record, delete it.
         if user.id in existing_collaborator_ids:
 
-            fg_print.warning(f"Collaboration record for user {user.login} already exists in repository {repo.get_safe_name()}, replacing with new permissions...")
+            fg_print.warning(f"Collaboration record for user {user.login} already exists in repository {repo.get_safe_username()}, replacing with new permissions...")
             deleted = self._forgejo_delete_collaborator(repo=repo,
                                                     collaborator_username=user.login)
             if not deleted:
@@ -655,14 +655,14 @@ class ForgejoMigrator:
         """add a collaborator to a repository"""
         try:
             self.fg_api.repository.repo_add_collaborator(owner = repo.get_safe_owner_name(), 
-                                                        repo = repo.get_safe_name(), 
+                                                        repo = repo.get_safe_username(), 
                                                         collaborator = collaborator_username, 
                                                         permission = permission)
-            fg_print.debug(f"Collaboration on {repo.get_safe_name()} for user {collaborator_username} recorded!")
+            fg_print.debug(f"Collaboration on {repo.get_safe_username()} for user {collaborator_username} recorded!")
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to add Collaboration for user {collaborator_username} on {repo.get_safe_name()}: {detail}",
-                           f"Failed to add Collaboration for user {collaborator_username} on {repo.get_safe_name()}")
+            fg_print.error(f"Failed to add Collaboration for user {collaborator_username} on {repo.get_safe_username()}: {detail}",
+                           f"Failed to add Collaboration for user {collaborator_username} on {repo.get_safe_username()}")
             return False
         # return true even if the collaborator already exists in the repository, because the existence of the collaborator in the repository is not a failure for the import of the project, we just skip it and continue with the import of the other collaborators
         return True

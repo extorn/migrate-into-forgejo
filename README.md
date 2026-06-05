@@ -1,5 +1,6 @@
 # Any Source Control System to Forgejo migration script
-**Currently only gitlab support is implemented, but implementing support for others in a modular way is possible.
+
+\*\*Currently only gitlab support is implemented, but implementing support for others in a modular way is possible.
 
 # **WARNING:**
 
@@ -9,8 +10,7 @@ Ping me an email if you're interested in this code.
 
 Notes
 
-1.  _I am trying to keep this readme up to date as I go, but it is possible that it lags slightly; that will be addressed once I finish refactoring the code._
-2. _My current task is to enable paging support both in Forgejo API calls and gitlab.
+1.  All gitlab list calls currently retrieve all items available, but Forgejo ones do not, and paging isn't yet supported so large numbers of items may not all import correctly when merging into an existing Forgejo instance.
 
 ## Preamble
 
@@ -18,15 +18,21 @@ This script uses the GitLab API and a combination of [pyforgejo](https://codeber
 
 This script supports migration of:
 
-*   Repositories & Wiki (fork status is lost)
-*   Users (no profile pictures)
-*   Groups
-*   Public SSH keys, PGP Keys
+Repositories & Wiki (fork status is lost)
 
-*   It supports creation of repository Teams and collaborators with
-    roles defined to your configured specification, mapping users with any given source access level to those roles as you decide
+Users (no profile pictures)
+
+Groups
+
+Public SSH keys, PGP Keys
+
+It supports creation of repository Teams and collaborators with roles defined to your configured specification, mapping Gitlab users with any given source access level to those roles as you decide
 
 Tested with GitLab Version 18.11 and Forgejo Version 15.0.2
+
+## Note
+
+The code has been written in such a way as to facilitate painless extension to load from **any** source control system of your choice by implementing only the code to load the data from that system.
 
 ## **Usage**
 
@@ -50,17 +56,17 @@ and you call the scripts using `--help`:
 
 ## Configuration Files
 
-### **forgejo_user_roles.yaml**
+### **forgejo\_user\_roles.yaml**
 
 This file contains a list of all supported roles within Forgejo as defined by this script (you are not limited to any number by Forgejo itself.
 
-Please alter the values in this file to match your personal configuration desires, I've tried to set what I thought looked reasonable to me, but I'm confident you may wish to change any or all values. You can add as many roles as you wish or have as few as you wish with the caveat that there currently ***MUST*** be a role with a team named ***Owners***.
+Please alter the values in this file to match your personal configuration desires, I've tried to set what I thought looked reasonable to me, but I'm confident you may wish to change any or all values. You can add as many roles as you wish or have as few as you wish with the caveat that there currently _**MUST**_ be a role with a team named _**Owners**_.
 
-### **gitlab_forgejo_roles_map.yaml**
+### **gitlab\_forgejo\_roles\_map.yaml**
 
-This file contains a list of mappings from gitlab access levels to
-Forgejo roles as defined in the forgejo_user_roles.yaml file. Feel free
-to change the values in this, add more or delete them as you wish to match
+This file contains a list of mappings from gitlab access levels to  
+Forgejo roles as defined in the forgejo\_user\_roles.yaml file. Feel free  
+to change the values in this, add more or delete them as you wish to match  
 your requirements.
 
 ### **.migrate.ini file**
@@ -162,13 +168,14 @@ This is a fork of https://github.com/GEANT/gitlab-to-forgejo.
 
 Changes:
 
-*   I've re-added support for issues, milestones and labels, though don't use these myself.
+*   ~I've re-added support for issues, milestones and labels, though don't use these myself.~
 *   I've added support for gitlab client certificate authentication (for when the server is behind a proxy enforcing this)
 *   I've added support for forgejo client certificate authentication (for when the server is behind a proxy enforcing this)
 *   I've updated this script to use the new API for forgejo (2.0+).
 *   I tried to make minimal changes initially, but in the end, I have refactored it to the point it is now a reusable more modular migration engine
 *   Added support for user PGP and GPG key import, though don't use these myself.
-*   Added support for creating Organization Teams and Collaborators to match GitLab users based on gitlab access level.
+*   **Added support for importing Organization Teams and Users to match GitLab Users and Gitlab Groups, assigning using Roles based on gitlab access level.**
+*   **Added support for applying Collaboration entries for Repositories based on the Users' membership of Gitlab Group and or Project**
 
 Note:
 

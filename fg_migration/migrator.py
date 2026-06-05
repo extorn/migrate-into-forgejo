@@ -192,12 +192,12 @@ class Migrator:
             if user := self.migration_dest.get_forgejo_user(username=source_repo.get_safe_owner_name()):
                 return self._get_owner_identity(user)
             else:
-                fg_print.error(f"Failed to retrieve Forgejo owner User for Forgejo repository {source_repo.get_safe_name()}, skipping import of {source_repo.source_type} {source_repo.name}!")
+                fg_print.error(f"Failed to retrieve Forgejo owner User for Forgejo repository {source_repo.get_safe_username()}, skipping import of {source_repo.source_type} {source_repo.name}!")
         else:
             if org := self.migration_dest.get_forgejo_organization(repo=source_repo, org_name=source_repo.get_safe_owner_name()):
                 return self._get_owner_identity(org)
             else:
-                fg_print.error(f"Failed to retrieve Forgejo owner organization for repository {source_repo.get_safe_name()}, skipping import of {source_repo.source_type} {source_repo.name}!")
+                fg_print.error(f"Failed to retrieve Forgejo owner organization for repository {source_repo.get_safe_username()}, skipping import of {source_repo.source_type} {source_repo.name}!")
         return None
 
 
@@ -216,14 +216,14 @@ class Migrator:
         forgejo_owner = self._resolve_forgejo_repo_owner(source_repo=source_repo)
         
         if forgejo_owner is None:
-            fg_print.error(f"Importing {source_repo.source_system} {source_repo.name}. Failed to locate Forgejo repository owner {source_repo.get_safe_owner_name()} for repository {source_repo.get_safe_name()}, skipping import!",
-                        f"Importing {source_repo.source_system} {source_repo.name}. Failed to locate Forgejo repository owner for repository {source_repo.get_safe_name()}")
+            fg_print.error(f"Importing {source_repo.source_system} {source_repo.name}. Failed to locate Forgejo repository owner {source_repo.get_safe_owner_name()} for repository {source_repo.get_safe_username()}, skipping import!",
+                        f"Importing {source_repo.source_system} {source_repo.name}. Failed to locate Forgejo repository owner for repository {source_repo.get_safe_username()}")
             return
     
         
         if not forgejo_owner.is_complete():
-            fg_print.error(f"Importing {source_repo.source_system} {source_repo.name}. Located incomplete Forgejo repository owner {source_repo.get_safe_owner_name()} for repository {source_repo.get_safe_name()}, skipping import!",
-                        f"Importing {source_repo.source_system} {source_repo.name}. Located incomplete Forgejo repository owner for repository {source_repo.get_safe_name()}")
+            fg_print.error(f"Importing {source_repo.source_system} {source_repo.name}. Located incomplete Forgejo repository owner {source_repo.get_safe_owner_name()} for repository {source_repo.get_safe_username()}, skipping import!",
+                        f"Importing {source_repo.source_system} {source_repo.name}. Located incomplete Forgejo repository owner for repository {source_repo.get_safe_username()}")
             return
 
 
@@ -246,14 +246,14 @@ class Migrator:
                                             pull_requests=True,
                                             releases=True,
                                             private=source_repo.is_private,
-                                            repo_name=source_repo.get_safe_name(),
+                                            repo_name=source_repo.get_safe_username(),
                                             uid=forgejo_owner.id,
                                             wiki=True,
                                     )
-                fg_print.info(f"{source_repo.source_system} {source_repo.source_type} {source_repo.get_safe_name()} imported from {source_repo.clone_url} and available at {imported_repo.clone_url}!")
+                fg_print.info(f"{source_repo.source_system} {source_repo.source_type} {source_repo.get_safe_username()} imported from {source_repo.clone_url} and available at {imported_repo.clone_url}!")
             except Exception as e:
                 detail = self.migration_dest._get_exception_detail(e)
-                fg_print.error(f"{source_repo.source_system} {source_repo.source_type} {source_repo.get_safe_name()} import failed from url {source_repo.clone_url} : {detail}")  
+                fg_print.error(f"{source_repo.source_system} {source_repo.source_type} {source_repo.get_safe_username()} import failed from url {source_repo.clone_url} : {detail}")  
 
 
 
@@ -265,7 +265,7 @@ class Migrator:
         """Import all teams or individuals that should have access to a repository"""
 
         repo_accessors : CanonicalRepoAccessors = migration_source.list_repository_accessors(source_repo)
-
+        
         """import collaborators for a repository"""
         if source_repo.is_individual:
             fg_print.info(f"\nImporting collaborators for personal {source_repo.source_type} {source_repo.name}...")
@@ -273,8 +273,11 @@ class Migrator:
             fg_print.info(f"\nImporting collaborators for shared {source_repo.source_type} {source_repo.name}...")
         
         if len(repo_accessors.members) == 0:
-            fg_print.info(f"No {repo_accessors.source_type} found for {source_repo.source_type} {source_repo.name}, skipping!")
+            fg_print.info(f"No {repo_accessors.source_type} found to be accessing {source_repo.source_type} {source_repo.name}, No collaborators to add")
             return
+        else:
+            ropo_accessor_names=[accessor.username for accessor in repo_accessors.members]
+            fg_print.debug(f"Repository {source_repo.name} accessors found: {ropo_accessor_names}")
 
         # Look up the actual stored username in the database - ensures the project exists but is a marginal overhead
         forgejo_repo_owner = self._resolve_forgejo_repo_owner(source_repo=source_repo)
@@ -283,12 +286,12 @@ class Migrator:
             return
         
         if forgejo_repo_owner.username is None:
-            fg_print.error(f"Importing {source_repo.source_system} {source_repo.name} accessors. Located incomplete Forgejo repository owner {source_repo.get_safe_owner_name()} for repository {source_repo.get_safe_name()}, skipping import!",
-                        f"Importing {source_repo.source_system} {source_repo.name} accessors. Located incomplete Forgejo repository owner for repository {source_repo.get_safe_name()}")
+            fg_print.error(f"Importing {source_repo.source_system} {source_repo.name} accessors. Located incomplete Forgejo repository owner {source_repo.get_safe_owner_name()} for repository {source_repo.get_safe_username()}, skipping import!",
+                        f"Importing {source_repo.source_system} {source_repo.name} accessors. Located incomplete Forgejo repository owner for repository {source_repo.get_safe_username()}")
             return
         
         # get list of Users that are collaborators already.
-        existing_collaborators = self.migration_dest.get_forgejo_collaborators(owner_username=forgejo_repo_owner.username, repo=source_repo.get_safe_name())
+        existing_collaborators = self.migration_dest.get_forgejo_collaborators(owner_username=forgejo_repo_owner.username, repo=source_repo.get_safe_username())
         existing_collaborator_ids :set[int] = {user.id
                                                 for user in existing_collaborators
                                                 if user.id is not None} # id should ALWAYS be not null since from database
@@ -298,7 +301,7 @@ class Migrator:
         if not source_repo.is_individual:
             # owner is an organization
             existing_org_teams = self.migration_dest.get_forgejo_teams(org_name=forgejo_repo_owner.username)
-            existing_repo_teams = self.migration_dest.forgejo_list_team_in_repository(owner_username=forgejo_repo_owner.username, repo_name=source_repo.get_safe_name())
+            existing_repo_teams = self.migration_dest.forgejo_list_team_in_repository(owner_username=forgejo_repo_owner.username, repo_name=source_repo.get_safe_username())
             existing_repo_team_ids = {team.id for team in existing_repo_teams}
             needs_direct_user_collaborators = not (self.migration_config.IS_FUZZY_TEAMS_ALLOWED)
             authorized_forgejo_usernames = {member.get_safe_username() for member in repo_accessors.members}
@@ -307,7 +310,7 @@ class Migrator:
             for forgejo_org_team in existing_org_teams:
                 add_team_to_repo = False
                 if forgejo_org_team.id in existing_repo_team_ids:
-                    fg_print.info(f"Skipping team {forgejo_org_team.name}, already attached to repository {source_repo.get_safe_name()}")
+                    fg_print.info(f"Skipping team {forgejo_org_team.name}, already attached to repository {source_repo.get_safe_username()}")
                     continue # examine next team in user_teams
                 
                 # Only add non empty teams if all members are repository collaborators
@@ -326,7 +329,7 @@ class Migrator:
                 # we now know we should add this team (all members authorized) or not
                 if add_team_to_repo:
                     self.migration_dest.forgejo_add_team_to_repository(owner_username=forgejo_repo_owner.username,
-                                                                repo_name=source_repo.get_safe_name(),
+                                                                repo_name=source_repo.get_safe_username(),
                                                                 team_name=forgejo_org_team.name)
                     if needs_direct_user_collaborators:
                         #TODO will anyone ever want to add all users individually as well as in their teams? (if so, leave this set empty)
@@ -397,10 +400,10 @@ class Migrator:
                                         user=forgejo_user,
                                         repo=source_repo,
                                         permissions=forgejo_permissions) 
-            fg_print.info(f"Registered Forgejo user {accessor.username} as collaborator of {source_repo.get_safe_name()}")
+            fg_print.info(f"Registered Forgejo user {accessor.username} as collaborator of {source_repo.get_safe_username()}")
         else:
-            fg_print.error(f"Unable to add non existent Forgejo user {accessor.get_safe_username()} as collaborator of {source_repo.get_safe_name()}",
-                            f"Unable to add non existent Forgejo user {accessor.get_safe_username()} as collaborator of {source_repo.get_safe_name()}")
+            fg_print.error(f"Unable to add non existent Forgejo user {accessor.get_safe_username()} as collaborator of {source_repo.get_safe_username()}",
+                            f"Unable to add non existent Forgejo user {accessor.get_safe_username()} as collaborator of {source_repo.get_safe_username()}")
 
 
 
@@ -555,11 +558,13 @@ class Migrator:
                                for user in canonical_team_members}
 
         if existing_usernames == imported_usernames:
-            fg_print.info(f"Pre-existing team members exactly match team being imported, so reusing. Affected Forgejo Organization {organization.username} Team {matched_team.name}")
+            fg_print.info(f"Pre-existing team members exactly match team being imported, so reusing."
+                          f"\nAffected Forgejo Organization {organization.username} Team {matched_team.name}")
             return self.TeamMatchResult(matched_team=matched_team)
         
         if self.migration_config.USE_EXISTING_TEAMS:
-            fg_print.warning(f"Pre-existing team users will be granted access to new repositories that are created with access granted to this team. Affected Forgejo Organization {organization.username} Team {matched_team.name}, usernames: {existing_usernames}")
+            fg_print.warning(f"Pre-existing team users will be granted access to new repositories that are created with access granted to this team."
+                             f"\nAffected Forgejo Organization {organization.username} Team {matched_team.name}, usernames: {existing_usernames}")
             return self.TeamMatchResult(matched_team=matched_team)
         
         result = self._rename_team_out_of_the_way(team = matched_team)
@@ -584,28 +589,37 @@ class Migrator:
         canonical_teams: list[CanonicalTeam] = organization.teams
         
         # list all the usernames being mapped into teams
-        #all_team_forgejo_usernames = [user.get_safe_username() for team in canonical_teams for user in team.users]
-        #fg_print.info(f"Identified Forgejo roles for members for {organization.source_type} {organization.username} : {all_team_forgejo_usernames}")
+        all_team_forgejo_usernames = [user.get_safe_username() for team in canonical_teams for user in team.users]
+        fg_print.debug(f"Identified Forgejo roles for members for {organization.source_type} {organization.username} : {all_team_forgejo_usernames}")
         
         # For each used gitlab access level role
         for canonical_team in canonical_teams:
             forgejo_team_definition = self._get_forgejo_team_definition(source_access_level=canonical_team.source_access_level,
                                                                         fuzzy=self.migration_config.IS_FUZZY_TEAMS_ALLOWED)
-            
+            fg_print.debug(f"Processing canonical team, role {forgejo_team_definition.name} source_access_level:{canonical_team.source_access_level} with users {canonical_team.users}")
             if forgejo_team_definition is None:
                 # Unable to map the team from source system to Forgejo.
                 team_source_usernames = [user.username for user in canonical_team.users]
                 if not self.migration_config.IS_FUZZY_TEAMS_ALLOWED and not self.migration_config.IS_FUZZY_USERS_ALLOWED:
                     # Neither fuzzy teams nor fuzzy users
-                    fg_print.error(f"Import to Team failed for {self.migration_source.getSourceSystemName()} users {team_source_usernames}. Unable to find a direct match for team with {self.migration_source.getSourceSystemName()}  access level {canonical_team.source_access_level}. Import will need either Fuzzy teams or Fuzzy users to succeed.",
+                    fg_print.error(f"Import to Team failed for {self.migration_source.getSourceSystemName()} users {team_source_usernames}."
+                                   f"\nUnable to find a direct match for team with {self.migration_source.getSourceSystemName()}"
+                                   f" access level {canonical_team.source_access_level}."
+                                   f"\nImport will need either Fuzzy teams or Fuzzy users to succeed.",
                                 f"Import to Team failed for {self.migration_source.getSourceSystemName()} users {team_source_usernames}.")
                 elif not self.migration_config.IS_FUZZY_USERS_ALLOWED:
                     # Only fuzzy teams
-                    fg_print.error(f"Import to Team failed for {self.migration_source.getSourceSystemName()} users {team_source_usernames}. Unable to find neither a direct nor fuzzy match for team with {self.migration_source.getSourceSystemName()}  access level {canonical_team.source_access_level}. Check fuzzy match < > settings in .migrate.ini",
-                                f"Import to Team failed for {self.migration_source.getSourceSystemName()} users {team_source_usernames}.")
+                    fg_print.error(f"Import to Team failed for {self.migration_source.getSourceSystemName()} users {team_source_usernames}."
+                                   f"\nUnable to find neither a direct nor fuzzy match for team with {self.migration_source.getSourceSystemName()}"
+                                   f" access level {canonical_team.source_access_level}."
+                                   f"\nCheck fuzzy match < > settings in .migrate.ini",
+                                   f"Import to Team failed for {self.migration_source.getSourceSystemName()} users {team_source_usernames}.")
                 else: # IS_FUZZY_USERS
                     # Only fuzzy users
-                    fg_print.warning(f"Import to Team failed for {self.migration_source.getSourceSystemName()} users {team_source_usernames}. Unable to find neither a direct nor fuzzy match for team with {self.migration_source.getSourceSystemName()}  access level {canonical_team.source_access_level}. User will be added as an individual Collaborator with fuzzy matching if possible")
+                    fg_print.warning(f"Import to Team failed for {self.migration_source.getSourceSystemName()} users {team_source_usernames}. "
+                                     f"Unable to find neither a direct nor fuzzy match for team with {self.migration_source.getSourceSystemName()}"
+                                     f" access level {canonical_team.source_access_level}. User will be added as an individual Collaborator with"
+                                     f" fuzzy matching if possible")
                 # no team available, try next access level in use.
                 continue
             
@@ -631,13 +645,17 @@ class Migrator:
                 else:
                     # also update the existing teams set for consistency.
                     if forgejo_team.name is None:
-                        raise Exception(f"Forgejo returned a team without a name, cannot continue with import of teams for organization {organization.get_safe_username()} because we rely on team names as keys in our existing teams map. This should never happen, please investigate! Team details: {forgejo_team}")
+                        raise Exception(f"Forgejo returned a team without a name, cannot continue with import of teams for "
+                                        f"organization {organization.get_safe_username()} because we rely on team names as "
+                                        f"keys in our existing teams map. This should never happen, please investigate! Team details: {forgejo_team}")
                     existing_forgejo_org_teams_map[forgejo_team.name.lower()] = forgejo_team
                     # ensure we update the reference (we'll add the users to this team)
                     existing_team = forgejo_team
             
+            # Update the username for this canonical team to match that of the team
+            canonical_team.username=existing_team.name
+
             # Add all matching users to this team
-            
             self._import_team_users(organization=organization, canonical_team=canonical_team, dest_team=existing_team, is_new_team=is_new_team)
         
         # Now create any missing empty teams if desired
@@ -670,15 +688,17 @@ class Migrator:
 
         for canonical_user in canonical_team.users:
             if canonical_user.get_safe_username() in existing_member_names:
-                fg_print.info(f"User {canonical_user.get_safe_username()} is already member of organization {organization.get_safe_username()} team {dest_team.name}, skipping.")
+                fg_print.info(f"User {canonical_user.get_safe_username()} is already member of organization {organization.get_safe_username()}"
+                              f" team {dest_team.name}, skipping.")
                 continue
             added = self.migration_dest.forgejo_add_user_to_organization_team(organization_name=organization.get_safe_username(),
                                                                         username=canonical_user.get_safe_username(), team=dest_team)
             if added:
-                fg_print.info(f"Imported {self.migration_source.getSourceSystemName()} user {canonical_user.username} permissions in {organization.source_type} {organization.username} team {canonical_team.username}")
+                fg_print.info(f"Imported {self.migration_source.getSourceSystemName()} user {canonical_user.username} permissions"
+                              f" in {organization.source_type} {organization.username} team {canonical_team.username}")
             else:
-                fg_print.error(f"Failed to import {self.migration_source.getSourceSystemName()} user {canonical_user.username} permissions in {organization.source_type} {organization.username}",
-                                f"Failed to import {self.migration_source.getSourceSystemName()} user {canonical_user.username} permissions in {organization.source_type} {organization.username}")
+                fg_print.error(f"Failed to import {self.migration_source.getSourceSystemName()} user {canonical_user.username} permissions"
+                               f" in {organization.source_type} {organization.username}")
 
 
 
@@ -740,38 +760,42 @@ class Migrator:
 
 
 
-    def import_repos(self):
-        """read all projects and their issues"""
+    def import_repos(self, import_repo_content:bool=True):
+        """read all projects and their issues if import_repo_content is True. Always applies Collabroration rights"""
         
         source_repos : list[CanonicalRepo] = self.migration_source.listRepos()
 
         source_repo : CanonicalRepo
         for source_repo in source_repos:
             
-            if source_repo.is_individual:
-                fg_print.info(f"Importing personal {source_repo.source_type} {source_repo.name} from owner {source_repo.owner_name}")
-            else:
-                fg_print.info(f"Importing {source_repo.source_type} {source_repo.name} from owner {source_repo.owner_name}")
+            if import_repo_content:
+                if source_repo.is_individual:
+                    fg_print.info(f"Importing personal {source_repo.source_type} {source_repo.name} from owner {source_repo.owner_name}")
+                else:
+                    fg_print.info(f"Importing {source_repo.source_type} {source_repo.name} from owner {source_repo.owner_name}")
                 
-            # import project repo
-            self._run_inbuilt_repo_import(source_repo=source_repo)
+                # import project repo
+                self._run_inbuilt_repo_import(source_repo=source_repo)
 
+                # Handled by inbuilt repo migration
+                # import labels
+                #labels: list[gitlab.v4.objects.ProjectLabel] = project.labels.list(get_all=True)
+                #fg_print.info(f"Found {len(labels)} labels for project {project.name}")
+                #_import_project_labels(fg_api, labels, project_owner_name, project.name)
+
+                # Handled by inbuilt repo migration
+                # import milestones
+                #milestones: list[gitlab.v4.objects.ProjectMilestone] = project.milestones.list(all=True)
+                #fg_print.info(f"Found {len(milestones)} milestones for project {project.name}")
+                #_import_project_milestones(fg_api, milestones, project_owner_name, project.name)
+
+                # Handled by inbuilt repo migration
+                # import issues
+                #issues: list[gitlab.v4.objects.ProjectIssue] = project.issues.list(get_all=True)
+                #fg_print.info(f"Found {len(issues)} issues for project {project.name}")
+                #_import_project_issues(fg_api, issues, project_owner_name, project.name)
+            else:
+                #fg_print.info(f"Skipping import of {source_repo.source_type} {source_repo.name} from owner {source_repo.owner_name} *Contents*")
+                pass
+            # Always configure the accessors.
             self._import_repository_accessors(source_repo=source_repo, migration_source=self.migration_source)
-
-            # Handled by inbuilt repo migration
-            # import labels
-            #labels: list[gitlab.v4.objects.ProjectLabel] = project.labels.list(get_all=True)
-            #fg_print.info(f"Found {len(labels)} labels for project {project.name}")
-            #_import_project_labels(fg_api, labels, project_owner_name, project.name)
-
-            # Handled by inbuilt repo migration
-            # import milestones
-            #milestones: list[gitlab.v4.objects.ProjectMilestone] = project.milestones.list(all=True)
-            #fg_print.info(f"Found {len(milestones)} milestones for project {project.name}")
-            #_import_project_milestones(fg_api, milestones, project_owner_name, project.name)
-
-            # Handled by inbuilt repo migration
-            # import issues
-            #issues: list[gitlab.v4.objects.ProjectIssue] = project.issues.list(get_all=True)
-            #fg_print.info(f"Found {len(issues)} issues for project {project.name}")
-            #_import_project_issues(fg_api, issues, project_owner_name, project.name)

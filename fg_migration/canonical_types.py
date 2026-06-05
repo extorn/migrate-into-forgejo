@@ -118,7 +118,8 @@ class CanonicalRepoAccessors:
 class CanonicalRepo:
 
     is_individual:bool # Owned by a user? (else an organization)
-    name:str
+    username:str
+    name:str # Note, in some systems, a user friendly name may be possible, but in Forgejo, there is just the username at present.
     description:str
     owner_name: str
     clone_url:str
@@ -130,7 +131,7 @@ class CanonicalRepo:
     source_id:str # the UUID for this object in the source system e.g. gitlab
     source_type: str = "Repository" # what is this type defined as at source e.g. for gitlab, Project
 
-    def get_safe_name(self) -> str:
+    def get_safe_username(self) -> str:
         return name_clean(self.name)
     
     def get_safe_owner_name(self) -> str:

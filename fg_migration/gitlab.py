@@ -14,6 +14,7 @@ from fg_migration.canonical_types import CanonicalGpgKey, CanonicalKey, Canonica
 from fg_migration.config_types import GitLabMigrationConfig, GitLabConfig
 
 class GitLabMigrationSource(MigrationSource):
+    """A Gitlab implementation of a MigrationSource for Forgejo. Note that all lists are retrieved in one operation, without paging"""
 
     gitlab_api: gitlab.Gitlab
     gitlab_config: GitLabConfig
@@ -149,11 +150,13 @@ class GitLabMigrationSource(MigrationSource):
             auth_username=self.gitlab_config.GITLAB_ADMIN_USER
             auth_token=self.gitlab_config.GITLAB_TOKEN
 
-            #TODO is it worth pulling in all the project members now so avoid retrieving them again?
-            repo = CanonicalRepo(source_system=self.source_system, source_id=project.get_id(),is_individual=is_individual, name=project.name,owner_name=owner_name, clone_url=clone_url, 
-                                       is_private=is_private,description=project.description,
-                                       auth_username=auth_username,auth_password=auth_password,auth_token=auth_token,
-                                       source_type="Project")
+            fg_print.debug(f"{project.path} : {project.name}")
+            repo = CanonicalRepo(source_system=self.source_system, source_id=project.get_id(),
+                                 is_individual=is_individual, username=project.path, name=project.name,
+                                 owner_name=owner_name, clone_url=clone_url, 
+                                 is_private=is_private,description=project.description,
+                                 auth_username=auth_username,auth_password=auth_password,auth_token=auth_token,
+                                 source_type="Project")
             repos.append(repo)
             seen_repos_map[repo.source_id] = repo.name
             
@@ -185,14 +188,38 @@ class GitLabMigrationSource(MigrationSource):
         
 
 
-    @override
-    def list_repository_accessors(self, repo:CanonicalRepo) -> CanonicalRepoAccessors:
-        # gitlab project = forgejo repo
-        project: gitlab.v4.objects.Project = self.gitlab_api.projects.get(id=repo.source_id)
+    def _list_repository_accessors_inherited(self, project: gitlab.v4.objects.Project) -> list[CanonicalRepoAccessor]:
+        """List all those repository accessors that are inherited from a group in the hierarchy to which the project belongs"""
+
+        repo_accessors_members : list[CanonicalRepoAccessor] = []
+        ancestor_groups = project.groups.list(get_all=True)
+        group_ids = [anc.get_id() for anc in ancestor_groups]
+        for group_id in group_ids:
+            fg_print.debug(f"Loading inherited users from owner group {group_id}")
+            group: gitlab.v4.objects.Group = self.gitlab_api.groups.get(id=group_id)
+            # Group members are users. They share a finite set of access_level
+            # we can map that access level to a team.
+            groupMembers: list[gitlab.v4.objects.GroupMember] = group.members.list(get_all=True)
+            # For every user that has access to this group
+            for group_member in groupMembers:
+                if self._is_ignore_gitlab_user(group_member.username):
+                    if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
+                        fg_print.warning(f"Ignored a GitLab specific system user {group_member.username}. If this is incorrect, rerun import permitting system user cloning")
+                        continue
+                    else:
+                        fg_print.warning(f"Likely a GitLab specific system user {group_member.username}. Can possibly be deleted after import!")
+                repo_accessors_members.append(CanonicalRepoAccessor(username = group_member.username, access_level= group_member.access_level))
+        return repo_accessors_members
+    
+
+
+    def _list_repository_accessors_inherited(self, project: gitlab.v4.objects.Project) -> list[CanonicalRepoAccessor]:
+        """List all those repository accessors that are directly added to this project"""
+        repo_accessors_members : list[CanonicalRepoAccessor] = []
+
         project_members: list[gitlab.v4.objects.ProjectMember] = project.members.list(get_all=True)
         project_member : gitlab.v4.objects.ProjectMember
-        repo_accessors_members : list[CanonicalRepoAccessor] = []
-        repo_accessors = CanonicalRepoAccessors(source_system=self.source_system, source_type="User", members=repo_accessors_members)
+        
         for project_member in project_members:
             if self._is_ignore_gitlab_user(project_member.username):
                 if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
@@ -200,8 +227,27 @@ class GitLabMigrationSource(MigrationSource):
                     continue
                 else:
                     fg_print.warning(f"Likely a GitLab specific system user {project_member.username}. Can possibly be deleted after import!")
-
+            fg_print.debug(f"Added accessor {project_member.username} for project {project.path}")
             repo_accessors_members.append(CanonicalRepoAccessor(username = project_member.username, access_level= project_member.access_level))
+        
+        return repo_accessors_members
+
+
+    @override
+    def list_repository_accessors(self, repo:CanonicalRepo) -> CanonicalRepoAccessors:
+        # gitlab project = forgejo repo
+        project: gitlab.v4.objects.Project = self.gitlab_api.projects.get(id=repo.source_id)
+        fg_print.debug(f"Listing accessors for project id {repo.source_id}, project {project.path}  [{project.name}]")
+        repo_accessors_members : list[CanonicalRepoAccessor] = []
+        repo_accessors = CanonicalRepoAccessors(source_system=self.source_system, source_type="Users", members=repo_accessors_members)
+        
+        if not repo.is_individual:
+            # These are INHERITED accessors (of the gitlab group that owns this project)
+            repo_accessors_members += self._list_repository_accessors_inherited(project=project)
+            
+        # These are DIRECT accessors
+        repo_accessors_members += self._list_repository_accessors_inherited(project=project)
+        
         return repo_accessors
 
 

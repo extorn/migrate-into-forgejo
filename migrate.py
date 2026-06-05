@@ -4,19 +4,20 @@
 # and collaborators from GitLab to Forgejo
 #
 """
-Usage: migrate.py [--debug] [--users] [--groups] [--projects] [--all] [--notify]
+Usage: migrate.py [--debug] [--users] [--groups] [--projects] [--membership] [--all] [--notify]
        migrate.py --help
 
-Migration script to import projects, users, groups, from GitLab to Forgejo.
+Migration script to import users, groups, projects, and group/user membership of projects from GitLab to Forgejo.
 
 Options
-  -h, --help  Show this screen
-  --debug     show extra debug output
-  --users     migrate users
-  --groups    migrate groups
-  --projects  migrate projects
-  --all       migrate all
-  --notify    send notification to users
+  -h, --help    Show this screen
+  --debug       show extra debug output
+  --users       migrate users
+  --groups      migrate groups
+  --projects    migrate projects
+  --membership  migrate project membership
+  --all         migrate all
+  --notify      send notification to users
 """
 import os
 import configparser
@@ -33,7 +34,7 @@ from fg_migration.migrator import Migrator
 from fg_migration import fg_print
 from fg_migration.utils import _build_forgejo_api_client, _build_gitlab_api_client, _test_forgejo_connection
 
-SCRIPT_VERSION = "1.0.0-alpha.1"
+SCRIPT_VERSION = "1.0.0-alpha.2"
 
 
 
@@ -83,21 +84,22 @@ def main():
                         migration_source=migration_source, 
                         migration_dest=migration_dest)
 
-    # IMPORT System users
+    # IMPORT System Users
     if args["users"] or args["all"]:
         migrator.import_users()
-    # IMPORT Organizations
+    # IMPORT Organizations and Teams (Groups and their member Users)
     if args["groups"] or args["all"]:
          # Note, import_groups uses the gitlab projects object because they're intrinsically linked really.
         migrator.import_organizations()
-    # IMPORT Repositories
-    if args["projects"] or args["all"]:
-        migrator.import_repos()
+    # IMPORT Repositories (Projects) AND OR Collaborators (Memberships of Projects)
+    if args["projects"] or args["membership"] or args["all"]:
+        migrator.import_repos(import_repo_content=args["projects"])
     # IMPORT NOTHING ?
     if (
         not args["users"]
         and not args["groups"]
         and not args["projects"]
+        and not args["membership"]
         and not args["all"]
     ):
         fg_print.info("")
