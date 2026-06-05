@@ -18,9 +18,9 @@ This script uses the GitLab API and a combination of [pyforgejo](https://codeber
 
 This script supports migration of:
 
-Repositories & Wiki (fork status is lost)
+Repositories & Wiki (?fork status is lost? - is this the case? this is part of the internal Forgejo migration)
 
-Users (no profile pictures)
+Users (including Avatars for any **NEWLY** created users)
 
 Groups
 
@@ -180,11 +180,11 @@ Changes:
 *   Added support for user PGP and GPG key import, though don't use these myself.
 *   **Added support for importing Organization Teams and Users to match GitLab Users and Gitlab Groups, assigning using Roles based on gitlab access level.**
 *   **Added support for applying Collaboration entries for Repositories based on the Users' membership of Gitlab Group and or Project**
+*   **Added support for User avatar migration**
 
 Note:
 
-*   I have added warnings where users are found that I think are likely to be gitlab system users. They are imported anyway, just in case, but you're made aware. You can choose to filter out gitlab system users from the migration.
-*   If a user fails to import, e.g. ghost is a reserved username in forgejo, then that doesn't stop the script trying to add that user to any groups / teams which makes for some logging noise
+*   I have added warnings where users are found that I think are likely to be gitlab system users. They are imported anyway by default, but you're made aware. You can choose to filter out gitlab system users from the migration.
 *   I have not yet re-added support for custom import of labels, milestones since this is handled inside the core Forgejo migration of a repository.
 
 The parent was a fork of [gitlab\_to\_gitea](https://git.autonomic.zone/kawaiipunk/gitlab-to-gitea.git), with less features (this script does not import issues, milestones and labels)
