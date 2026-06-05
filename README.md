@@ -88,7 +88,11 @@ You need to create a configuration file called `.migrate.ini` and store it in th
 ###    e.g.
 ###    input -> my_setting=some_value # A comment
 ###    read as -> my_setting="some_value # A comment"
+
+
+
 [forgejo]
+
 # the yaml file where all the user roles and permissions are defined
 # These roles are used for both users and teams, and eventually for a migration, you'll be able to pick how you map to them using the source access levels to forgejo roles mapping file.
 #forgejo_user_roles_file_path=forgejo_user_roles.yaml
@@ -103,6 +107,8 @@ forgejo_token = <your-forgejo-token>
 #forgejo_client_auth_cert = /path/to/forgejo_client_auth_cert.pem
 #forgejo_client_auth_key = /path/to/forgejo_client_auth_key.pem
 
+
+
 [gitlab]
 
 # GitLab website url
@@ -114,8 +120,6 @@ gitlab_admin_pass = <your-gitlab-password>
 ### Which protocol should git connect to gitlab using? <ssh/https>
 #gitlab_sync_connection_type = https
 
-
-
 ### If your gitlab instance requires client authentication, 
 ### uncomment these parameters, and provide the appropriate paths
 ### If gitlab_client_auth_cert is provided, client authentication is switched on
@@ -125,11 +129,11 @@ gitlab_admin_pass = <your-gitlab-password>
 
 [migrate]
 
-### Add a Forgejo team for every possible gitlab group member access level
-#add_empty_teams_to_organizations=True <True / False>
+### If True, Add a Forgejo team for every possible gitlab group member access level
+#add_empty_teams_to_organizations=False
 
-### Add all Forgejo organisation teams to the repos owned by it, not just those with current users 
-#add_empty_teams_to_repos=True <True / False>
+### If True, Add all Forgejo organisation teams to the repository owned by their organization, not just those with current users 
+#add_empty_teams_to_repositories=False
 
 ### If an organization team exists matching the role of a user being imported:
 ### False: the original team will be renamed with suffix _old
@@ -156,7 +160,7 @@ gitlab_admin_pass = <your-gitlab-password>
 [migrate.gitlab]
 
 ### If True, users found matching ^project_[0-9]{2}_bot_[a-zA-Z0-9]{32}$ or in list ignored_gitlab_system_users will NOT be imported, but generate a warning instead
-#ignore_gitlab_system_users=False <True / False>
+#ignore_gitlab_system_users=False
 
 ### All exact matches on this list will not be imported (if ignore_gitlab_system_users=True)
 #ignored_gitlab_system_users="GitLab-Admin-Bot,ghost,support-bot,alert-bot,GitLabDuo"

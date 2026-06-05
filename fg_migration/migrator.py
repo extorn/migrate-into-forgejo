@@ -317,7 +317,7 @@ class Migrator:
                 team_members = self.migration_dest.get_forgejo_team_members(team=forgejo_org_team)
 
                 if len(team_members) == 0:
-                    add_team_to_repo = self.migration_config.ADD_EMPTY_TEAMS_TO_REPOS
+                    add_team_to_repo = self.migration_config.ADD_EMPTY_TEAMS_TO_REPOSITORIES
                 else:
                     add_team_to_repo = True
                     for member in team_members:
@@ -659,7 +659,7 @@ class Migrator:
             self._import_team_users(organization=organization, canonical_team=canonical_team, dest_team=existing_team, is_new_team=is_new_team)
         
         # Now create any missing empty teams if desired
-        if self.migration_config.ADD_EMPTY_TEAMS:
+        if self.migration_config.ADD_EMPTY_TEAMS_TO_ORGANIZATIONS:
             fg_print.info(f"Creating any missing empty teams for organization {organization.get_safe_username()}")
             for team_def in self.migration_dest.get_default_team_definitions():
                 # if the team is not already created, create it as an empty team (but only if config dictates, 

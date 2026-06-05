@@ -6,8 +6,8 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class MigrationConfig:
     USE_EXISTING_TEAMS:bool
-    ADD_EMPTY_TEAMS:bool
-    ADD_EMPTY_TEAMS_TO_REPOS:bool
+    ADD_EMPTY_TEAMS_TO_ORGANIZATIONS:bool
+    ADD_EMPTY_TEAMS_TO_REPOSITORIES:bool
     IS_FUZZY_TEAMS_ALLOWED:bool
     IS_FUZZY_USERS_ALLOWED:bool
     ALLOW_FUZZY_AUTH_DOWNGRADE:bool
@@ -17,8 +17,8 @@ class MigrationConfig:
     def from_config(cls, config:configparser.RawConfigParser, section:str="migrate"):
         return cls(
             USE_EXISTING_TEAMS = config.getboolean(section, option="use_existing_teams", fallback=False),
-            ADD_EMPTY_TEAMS = config.getboolean(section, option="add_empty_teams_to_organizations", fallback=False),
-            ADD_EMPTY_TEAMS_TO_REPOS = config.getboolean(section, option="add_empty_teams_to_repos", fallback=False),
+            ADD_EMPTY_TEAMS_TO_ORGANIZATIONS = config.getboolean(section, option="add_empty_teams_to_organizations", fallback=False),
+            ADD_EMPTY_TEAMS_TO_REPOSITORIES = config.getboolean(section, option="add_empty_teams_to_repositories", fallback=False),
             IS_FUZZY_TEAMS_ALLOWED = config.getboolean(section, option="allow_fuzzy_teams", fallback=False),
             IS_FUZZY_USERS_ALLOWED = config.getboolean(section, option="allow_fuzzy_users", fallback=False),
             ALLOW_FUZZY_AUTH_DOWNGRADE = config.getboolean(section, option="allow_fuzzy_auth_downgrade", fallback=False),
