@@ -41,7 +41,7 @@ The code has been written in such a way as to facilitate painless extension to l
 To keep your local system clean, it is preferrable to use a virtual environment.  
 You can follow these steps:
 
-N.b, on windows, run `migration/bin/activate`, not `source migration/bin/activate`
+N.b, on windows in cmd or powershell, run `migration/bin/activate`, not `source migration/bin/activate`
 
 ```
 python3 -m venv migration

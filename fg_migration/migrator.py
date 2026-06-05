@@ -8,7 +8,7 @@ from pyforgejo import CreateTeamOptionPermission, Organization, Repository, Team
 from fg_migration import fg_print
 from fg_migration.migration_source_type import MigrationSource
 from fg_migration.canonical_types import CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoAccessor, CanonicalRepoAccessors, CanonicalRepoOwner, CanonicalSystemUser, CanonicalTeam, CanonicalUser
-from fg_migration.forgjo import ForgejoMigrator, ForgejoRepositoryRole, ForgejoRolePermissionDefinition, ForgejoTeamDefinition
+from fg_migration.forgjo import ForgejoDestination, ForgejoRepositoryRole, ForgejoRolePermissionDefinition, ForgejoTeamDefinition
 from fg_migration.config_types import MigrationConfig
 from fg_migration.utils import name_clean
 
@@ -16,11 +16,11 @@ from fg_migration.utils import name_clean
 class Migrator:
 
     migration_config : MigrationConfig
-    migration_dest : ForgejoMigrator
+    migration_dest : ForgejoDestination
     migration_source: MigrationSource
     migration_date_time : str
 
-    def __init__(self, migration_config:MigrationConfig, migration_source:MigrationSource, migration_dest:ForgejoMigrator):
+    def __init__(self, migration_config:MigrationConfig, migration_source:MigrationSource, migration_dest:ForgejoDestination):
         self.migration_dest = migration_dest
         self.migration_config = migration_config
         self.migration_source = migration_source
@@ -45,7 +45,7 @@ class Migrator:
     #TODO reenable this code and update it to work (it isn't strictly required, but someone may find it useful to customise what happens normally in the auto-migrate)        
 
     # def _import_project_labels(
-    #     migration_dest: ForgejoMigrator,
+    #     migration_dest: ForgejoDestination,
     #     labels: list[gitlab.v4.objects.ProjectLabel],
     #     project_owner: str,
     #     project_name: str,
@@ -71,7 +71,7 @@ class Migrator:
 
 
     # def _import_project_milestones(
-    #     migration_dest: ForgejoMigrator,
+    #     migration_dest: ForgejoDestination,
     #     milestones: list[gitlab.v4.objects.ProjectMilestone],
     #     project_owner: str,
     #     project_name: str,
@@ -92,7 +92,7 @@ class Migrator:
 
 
     # def _import_project_issues(
-    #     migration_dest: ForgejoMigrator,
+    #     migration_dest: ForgejoDestination,
     #     issues: list[gitlab.v4.objects.ProjectIssue],
     #     project_owner: str,
     #     project_name: str,
@@ -232,12 +232,9 @@ class Migrator:
             fg_print.info(f"Importing {source_repo.source_system} {source_repo.source_type} {source_repo.name} from {source_repo.clone_url}...")
             
             try:
-                imported_repo : Repository = self.migration_dest.fg_api.repository.repo_migrate(
-                                            auth_password=source_repo.auth_password,
-                                            auth_username=source_repo.auth_username,
-                                            auth_token=source_repo.auth_token,
-                                            clone_addr=source_repo.clone_url,
-                                            description=source_repo.description,
+                imported_repo : Repository = self.migration_dest.repo_migrate(
+                                            source_repo=source_repo,
+                                            forgejo_owner=forgejo_owner,
                                             service="gitlab",
                                             issues=True,
                                             labels=True,
@@ -245,9 +242,6 @@ class Migrator:
                                             mirror=False,
                                             pull_requests=True,
                                             releases=True,
-                                            private=source_repo.is_private,
-                                            repo_name=source_repo.get_safe_username(),
-                                            uid=forgejo_owner.id,
                                             wiki=True,
                                     )
                 fg_print.info(f"{source_repo.source_system} {source_repo.source_type} {source_repo.get_safe_username()} imported from {source_repo.clone_url} and available at {imported_repo.clone_url}!")

@@ -27,7 +27,7 @@ from docopt import docopt
 
 from fg_migration.migration_source_type import MigrationSource
 from fg_migration.config_types import ForgejoConfig, GitLabConfig, GitLabMigrationConfig, MigrationConfig
-from fg_migration.forgjo import ForgejoMigrator
+from fg_migration.forgjo import ForgejoDestination
 from fg_migration.gitlab import GitLabMigrationSource
 from fg_migration.migrator import Migrator
 
@@ -79,7 +79,7 @@ def main():
     
 
     migration_source : MigrationSource = GitLabMigrationSource(gitlab_api=gl, gitlab_config=gitlab_config, gitlab_migration_config=migration_config_gitlab)
-    migration_dest : ForgejoMigrator = ForgejoMigrator(fg_api=fg, forgejo_config=forgejo_config)
+    migration_dest : ForgejoDestination = ForgejoDestination(fg_api=fg, forgejo_config=forgejo_config)
     migrator = Migrator(migration_config=migration_config,
                         migration_source=migration_source, 
                         migration_dest=migration_dest)
