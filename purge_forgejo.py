@@ -16,15 +16,13 @@ Options
 """
 import os
 import configparser
-import typing
 from pyforgejo import PyforgejoApi
-import pyforgejo
-from httpx import Client as HttpxClient
 from docopt import docopt
 from click import confirm
 from fg_migration import fg_print
 from fg_migration.config_types import ForgejoConfig
 from fg_migration.fg_purger import ForgejoPurger
+from fg_migration.forgeo_types import ForgejoApiBuilder
 
 SCRIPT_VERSION = "1.0.0-alpha.1"
 
@@ -41,20 +39,6 @@ forgejo_config = ForgejoConfig.from_config(config=config)
 #######################
 # CONFIG SECTION END
 #######################
-
-
-def _build_forgejo_api_client(config: ForgejoConfig) -> pyforgejo.PyforgejoApi:
-    return PyforgejoApi(base_url=config.FORGEJO_API_URL, api_key=config.FORGEJO_API_TOKEN, httpx_client = _build_httpx_client(config=config))
-
-def _build_httpx_client(config: ForgejoConfig, timeout: typing.Optional[float]=60, follow_redirects: typing.Optional[bool] = True) -> HttpxClient:
-    client = None
-    if(config.FORGEJO_CLIENT_AUTH_CERT != None and config.FORGEJO_CLIENT_AUTH_KEY != None):
-        cert_path = config.FORGEJO_CLIENT_AUTH_CERT
-        key_path = config.FORGEJO_CLIENT_AUTH_KEY
-        cert = (cert_path, key_path)
-        client = HttpxClient(cert=cert, timeout=timeout,follow_redirects=follow_redirects)
-    return client
-
 
 
 def ask_confirmation() -> None:
@@ -83,7 +67,11 @@ if __name__ == "__main__":
 
     ask_confirmation()
 
-    fg_api = _build_forgejo_api_client(config=forgejo_config)
+    fg_api_builder = ForgejoApiBuilder(forgejo_config=forgejo_config)
+    fg_api = fg_api_builder.build_forgejo_api_client()
+    fg_conn_success= fg_api_builder.test_forgejo_connection(fg_api=fg_api)
+    if not fg_conn_success:
+        os.sys.exit()
     purger = ForgejoPurger(fg_api=fg_api, forgejo_config=forgejo_config)
 
 

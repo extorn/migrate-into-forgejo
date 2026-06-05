@@ -1,11 +1,14 @@
 
+import base64
 from copy import deepcopy
 from dataclasses import dataclass
 import datetime as datetime
 
 from pyforgejo import CreateTeamOptionPermission, Organization, Repository, Team, User
+import requests
 
 from fg_migration import fg_print
+from fg_migration.forgeo_types import ForgejoApiBuilder
 from fg_migration.migration_source_type import MigrationSource
 from fg_migration.canonical_types import CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoAccessor, CanonicalRepoAccessors, CanonicalRepoOwner, CanonicalSystemUser, CanonicalTeam, CanonicalUser
 from fg_migration.forgjo import ForgejoDestination, ForgejoRepositoryRole, ForgejoRolePermissionDefinition, ForgejoTeamDefinition
@@ -18,13 +21,15 @@ class Migrator:
     migration_config : MigrationConfig
     migration_dest : ForgejoDestination
     migration_source: MigrationSource
-    migration_date_time : str
-
-    def __init__(self, migration_config:MigrationConfig, migration_source:MigrationSource, migration_dest:ForgejoDestination):
+    fg_api_builder : ForgejoApiBuilder
+    
+    def __init__(self, 
+                 migration_config:MigrationConfig, migration_source:MigrationSource, 
+                 migration_dest:ForgejoDestination, fg_api_builder:ForgejoApiBuilder):
         self.migration_dest = migration_dest
         self.migration_config = migration_config
         self.migration_source = migration_source
-        self.migration_date_time = f'{datetime.datetime.now():%Y%m%d_%H:%M:%S}'
+        self.fg_api_builder = fg_api_builder
         self.run_logic_checks()
 
     @dataclass
@@ -513,7 +518,7 @@ class Migrator:
 
         new_definition = deepcopy(current_definition)
         new_definition.name += name_clean(
-            f"_pre_migrate_{self.migration_date_time}"
+            f"_pre_migrate_{self.migration_config.MIGRATION_DATE_TIME}"
         )
 
         updated_team = self.migration_dest.forgejo_update_organization_team(
@@ -711,15 +716,87 @@ class Migrator:
             fg_print.info(f"Found {len(user.gpg_keys)} gpg keys for user {user.username}")
             fg_print.info(f"Found {len(user.keys)} public keys for user {user.username}")
 
-            if not self.migration_dest.forgejo_user_exists(username=user.get_safe_username()):  # need this because status 422 returned for conflict, not 409 
-                isAdded = self.migration_dest.forgejo_add_user(user=user, notify=notify)
-                if not isAdded:
-                    # something went wrong with the user import. can't do any more for this user.
+            # Note: newly created users will have the password field updated to their new temporary password
+            isInForgejo = self.migration_dest.forgejo_add_user(user=user, notify=notify)
+            if not isInForgejo:
+                # something went wrong with the user import. can't do any more for this user.
+                continue
+
+            if user.avatar_url is not None:
+                if user.password is not None:
+                    # Password will be none in event the user already exists. We can't help that.
+                    fg_print.error(f"Unable to import avatar for user {user.username} as this is only possible for newly created users")
                     continue
+
+                try:
+                    session = requests.Session()
+                    session.auth = (user.username, user.password)
+                    avatar_b64 = self._image_url_to_base64(user.avatar_url)
+                    url = f"{ForgejoApiBuilder.config.FORGEJO_API_URL}/user/avatar"
+                    response = session.post(url = url, json={"image": avatar_b64})
+                    response.raise_for_status()
+                except requests.RequestException as ex:
+                    fg_print.error(
+                        f"Unable to import avatar for user {user.username}: {ex}"
+                    )
 
             # import public keys if possible
             self._import_user_keys(user=user)
 
+            # Now print all the newly created users details (so they can be copied and pasted as needed into a spreadsheet perhaps)
+            self._list_user_details(users=users)
+
+        
+
+    def _list_user_details(self, users:list[CanonicalSystemUser]):
+        username_w = max(len("Username"), *(len(u.username) for u in users))
+        password_w = max(len("Password"), *(len(u.password or "") for u in users))
+        email_w = max(len("Email"), *(len(u.email or "") for u in users))
+
+        header = (
+            f"{'Username':<{username_w}}  "
+            f"{'Password':<{password_w}}  "
+            f"{'Email':<{email_w}}  "
+            f"Full Name"
+        )
+
+        fg_print.warning(header)
+        fg_print.warning("-" * len(header))
+
+        for user in users:
+            fg_print.warning(
+                f"{user.username:<{username_w}}  "
+                f"{user.password:<{password_w}}  "
+                f"{user.email:<{email_w}}  "
+                f"{user.full_name}"
+            )
+        
+
+    
+    def _image_url_to_base64(self, url) -> str|None:
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+
+            return base64.b64encode(response.content).decode("utf-8")
+
+        except requests.RequestException:
+            return None
+
+    
+
+    def _image_url_to_data_url(self, url) -> str|None:
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+
+            content_type = response.headers.get("Content-Type", "image/jpeg")
+            b64 = base64.b64encode(response.content).decode("utf-8")
+
+            return f"data:{content_type};base64,{b64}"
+
+        except requests.RequestException:
+            return None
 
 
     def import_organizations(self):

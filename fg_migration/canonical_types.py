@@ -42,6 +42,8 @@ class CanonicalSystemUser:
     username: str
     full_name: str
     email: str
+    avatar_url:str|None
+    password:str|None # This will be set to a new temporary one when creating the user but should otherwise be None
     gpg_keys:list[CanonicalGpgKey] = field(default_factory=list)
     keys:list[CanonicalKey] = field(default_factory=list)
 

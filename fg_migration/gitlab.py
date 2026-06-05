@@ -13,6 +13,45 @@ from fg_migration.migration_source_type import MigrationSource
 from fg_migration.canonical_types import CanonicalGpgKey, CanonicalKey, CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoAccessor, CanonicalRepoAccessors, CanonicalSystemUser, CanonicalTeam, CanonicalUser
 from fg_migration.config_types import GitLabMigrationConfig, GitLabConfig
 
+class GitLabApiBuilder:
+    config : GitLabConfig
+
+    def __init__(self, gitlab_config:GitLabConfig):
+            self.config = gitlab_config
+
+    def build_gitlab_api_client(self) -> gitlab.Gitlab:
+        #TODO confirmation needed that this session is being correctly passed into Gitlab api
+        session = self.requests.Session()
+        # add client authentication if cert and key are provided in the config
+        if(self.config.GITLAB_CLIENT_AUTH_CERT != None and self.config.GITLAB_CLIENT_AUTH_KEY != None):
+            cert_path = self.config.GITLAB_CLIENT_AUTH_CERT
+            key_path = self.config.GITLAB_CLIENT_AUTH_KEY
+            session.cert = (cert_path, key_path)
+        # private token or personal token authentication
+        gl = gitlab.Gitlab(url = self.config.GITLAB_URL, private_token=self.config.GITLAB_TOKEN, session=session)
+        try:
+            gl.auth()
+        except gitlab.GitlabAuthenticationError:
+            fg_print.error("Failed to authenticate with GitLab! Check access token and client authentication settings in .migrate.ini")
+            os.sys.exit()
+        except Exception as e:
+            fg_print.error(f"Failed to connect to GitLab! {e}")
+            os.sys.exit()
+        assert isinstance(gl.user, gitlab.v4.objects.CurrentUser)
+        fg_print.info(f"Connected to GitLab, version: {gl.version()[0]}")
+        return gl
+
+
+    def test_gitlab_connection(gl_api:gitlab.Gitlab):
+        version_tuple=gl_api.version()
+        fg_print.info(
+            f"Connected to GitLab, version: {version_tuple[0]}"
+        )
+        if version_tuple[0] == "unknown" and version_tuple[0] == "unknown":
+            return False
+        return True
+
+
 class GitLabMigrationSource(MigrationSource):
     """A Gitlab implementation of a MigrationSource for Forgejo. Note that all lists are retrieved in one operation, without paging"""
 
@@ -336,7 +375,13 @@ class GitLabMigrationSource(MigrationSource):
 
             gpg_keys : list[gitlab.v4.objects.UserGPGKey] = user.gpgkeys.list(get_all=True)
             keys: list[gitlab.v4.objects.UserKey] = user.keys.list(get_all=True)
-            
+
+            avatar_url : str | None
+            try:
+                avatar_url = user.avatar_url
+            except AttributeError:
+                avatar_url = None
+        
             emailAddress : str = self._build_or_extract_email(user)
             canonical_keys = [CanonicalKey(name=key.title, key=key.key) for key in keys]
             canonical_gpg_keys : list[CanonicalGpgKey] = []
@@ -349,7 +394,7 @@ class GitLabMigrationSource(MigrationSource):
                 
             canonical_users.append(CanonicalSystemUser(gpg_keys=canonical_gpg_keys,keys=canonical_keys,
                                                        email=emailAddress, full_name=user.name,
-                                                       username=user.username, source_system=self.source_system))
+                                                       username=user.username, source_system=self.source_system, avatar_url))
         return canonical_users
 
     

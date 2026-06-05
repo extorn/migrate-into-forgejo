@@ -4,12 +4,53 @@ from dataclasses import dataclass, field
 from pprint import pformat
 import re
 from typing import override
+import typing
 
 # Forgejo API imports:
-from pyforgejo import CreateTeamOptionPermission, Team
+from pyforgejo import CreateTeamOptionPermission, PyforgejoApi, Team
+import pyforgejo
 
 from fg_migration import fg_print
+from fg_migration.config_types import ForgejoConfig
 from fg_migration.utils import diff_dataclasses
+from httpx import Client as HttpxClient
+
+class ForgejoApiBuilder:
+    config : ForgejoConfig
+
+    def __init__(self, forgejo_config:ForgejoConfig):
+            self.config = forgejo_config
+
+    def build_forgejo_api_client(self, api_key: str | None) -> pyforgejo.PyforgejoApi:
+        """Build a Forgejo API Client using either the API key provided, or the default API key"""
+        api_token : str
+        if api_key is None:
+            api_token = self.config.FORGEJO_API_TOKEN
+        else:
+            api_token = api_key
+        return PyforgejoApi(base_url=self.config.FORGEJO_API_URL, 
+                            api_key=api_token, 
+                            httpx_client = self._build_httpx_client(config=self.config))
+    
+    def _build_httpx_client(self, timeout: typing.Optional[float]=60, follow_redirects: typing.Optional[bool] = True) -> HttpxClient:
+        client = None
+        if(self.config.FORGEJO_CLIENT_AUTH_CERT != None and self.config.FORGEJO_CLIENT_AUTH_KEY != None):
+            cert_path = self.config.FORGEJO_CLIENT_AUTH_CERT
+            key_path = self.config.FORGEJO_CLIENT_AUTH_KEY
+            cert = (cert_path, key_path)
+            client = HttpxClient(cert=cert, timeout=timeout,follow_redirects=follow_redirects)
+        return client
+
+    def test_forgejo_connection(self, fg_api:PyforgejoApi) -> bool:
+        try:
+            response = fg_api.miscellaneous.get_version()
+        except Exception as e:
+            fg_print.error(f"Failed to connect to Forgejo! {e}")
+            return False
+        fg_ver = response.version
+        
+        fg_print.info(f"Connected to Forgejo, version: {fg_ver}")
+        return True
 
 
 

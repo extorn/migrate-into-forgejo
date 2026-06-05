@@ -25,8 +25,9 @@ from docopt import docopt
 
 from fg_migration import fg_print
 from fg_migration.config_types import ForgejoConfig, GitLabConfig
+from fg_migration.forgeo_types import ForgejoApiBuilder
+from fg_migration.gitlab import GitLabApiBuilder
 from fg_migration.push_mirror_creator import PushMirrorCreator
-from fg_migration.utils import _build_forgejo_api_client, _build_gitlab_api_client, _test_forgejo_connection, _test_gitlab_connection
 
 SCRIPT_VERSION = "0.2"
 
@@ -65,21 +66,16 @@ def main():
 
     fg_print.info(f"Version: {SCRIPT_VERSION}\n")
 
-    #
-    # GitLab
-    #
+    gl_api_builder = GitLabApiBuilder(gitlab_config)
+    gl_api = gl_api_builder.build_gitlab_api_client()
+    gl_conn_success = gl_api_builder.test_gitlab_connection(gl_api)
 
-    gl = _build_gitlab_api_client(gitlab_config)
-    _test_gitlab_connection(gl_api=gl)
-    
+    fg_api_builder = ForgejoApiBuilder(forgejo_config=forgejo_config)
+    fg_api = fg_api_builder.build_forgejo_api_client()
+    fg_conn_success= fg_api_builder.test_forgejo_connection(fg_api=fg_api)
 
-    #
-    # Forgejo
-    #
-
-    fg_api = _build_forgejo_api_client(config=forgejo_config)
-
-    _test_forgejo_connection(fg_api=fg_api)
+    if not (gl_conn_success and fg_conn_success):
+        os.sys.exit()
 
 
     #
@@ -89,13 +85,13 @@ def main():
     limit = int(args["limit"])
 
     if limit != 100000:
-        projects = gl.projects.list(
+        projects = gl_api.projects.list(
             all=False,
             per_page=limit,
             page=1,
         )
     else:
-        projects = gl.projects.list(get_all=True)
+        projects = gl_api.projects.list(get_all=True)
 
     fg_print.info(f"Found {len(projects)} projects")
 

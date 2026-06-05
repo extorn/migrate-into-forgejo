@@ -25,14 +25,14 @@ import configparser
 from docopt import docopt
 
 
+from fg_migration.forgeo_types import ForgejoApiBuilder
 from fg_migration.migration_source_type import MigrationSource
 from fg_migration.config_types import ForgejoConfig, GitLabConfig, GitLabMigrationConfig, MigrationConfig
 from fg_migration.forgjo import ForgejoDestination
-from fg_migration.gitlab import GitLabMigrationSource
+from fg_migration.gitlab import GitLabApiBuilder, GitLabMigrationSource
 from fg_migration.migrator import Migrator
 
 from fg_migration import fg_print
-from fg_migration.utils import _build_forgejo_api_client, _build_gitlab_api_client, _test_forgejo_connection
 
 SCRIPT_VERSION = "1.0.0-alpha.2"
 
@@ -71,18 +71,24 @@ def main():
     fg_print.info(f"Version: {SCRIPT_VERSION}\n")
     
 
-    gl = _build_gitlab_api_client(gitlab_config)
+    gl_api_builder = GitLabApiBuilder(gitlab_config)
+    gl_api = gl_api_builder.build_gitlab_api_client()
+    gl_conn_success = gl_api_builder.test_gitlab_connection(gl_api)
 
-    fg = _build_forgejo_api_client(forgejo_config)
+    fg_api_builder = ForgejoApiBuilder(forgejo_config=forgejo_config)
+    fg_api = fg_api_builder.build_forgejo_api_client()
+    fg_conn_success= fg_api_builder.test_forgejo_connection(fg_api=fg_api)
 
-    _test_forgejo_connection(fg_api=fg)
+    if not (gl_conn_success and fg_conn_success):
+        os.sys.exit()
     
 
-    migration_source : MigrationSource = GitLabMigrationSource(gitlab_api=gl, gitlab_config=gitlab_config, gitlab_migration_config=migration_config_gitlab)
-    migration_dest : ForgejoDestination = ForgejoDestination(fg_api=fg, forgejo_config=forgejo_config)
+    migration_source : MigrationSource = GitLabMigrationSource(gitlab_api=gl_api, gitlab_config=gitlab_config, gitlab_migration_config=migration_config_gitlab)
+    migration_dest : ForgejoDestination = ForgejoDestination(fg_api=fg_api, forgejo_config=forgejo_config)
     migrator = Migrator(migration_config=migration_config,
                         migration_source=migration_source, 
-                        migration_dest=migration_dest)
+                        migration_dest=migration_dest,
+                        fg_api_builder=fg_api_builder)
 
     # IMPORT System Users
     if args["users"] or args["all"]:

@@ -479,7 +479,7 @@ class ForgejoDestination:
 
     def forgejo_add_user(self, user:CanonicalSystemUser, notify: bool) -> bool:
         """add a user to Forgejo, return True if user created or already exists"""
-
+        
         if not self.forgejo_user_exists(username=user.get_safe_username()): # need this because status 422 returned for conflict, not 409 
             rnd_str = "".join(random.choices(string.ascii_uppercase + string.digits, k=10))
             tmp_password = f"Tmp1!{rnd_str}"
@@ -490,10 +490,12 @@ class ForgejoDestination:
                     login_name=user.get_safe_username(),
                     password=tmp_password,
                     send_notify=notify,
+                    must_change_password=True, # this is a temporary one, so vital they change as soon as they log in
                     source_id=0,  # local user
                     username=user.get_safe_username(),
                 )
-                fg_print.info(f"User {user.username} imported as {user.get_safe_username()}, temporary password: {tmp_password}")
+                fg_print.info(f"User {user.username} imported as {user.get_safe_username()}")
+                user.password = tmp_password
                 return True
             except ConflictError:
                 return True # already exists
@@ -630,7 +632,7 @@ class ForgejoDestination:
 
 
 
-    @deprecated("This cannot be used to create api tokens when the API was authorised using an access token")
+    @deprecated("WARNING: This cannot be used to create api tokens when the API was authorised using an access token")
     def forgejo_delete_temp_api_token_for_user(self, username:str, token_name:str):
         """Delete an Access Token for the user (if using sudo)"""
         try:
@@ -643,7 +645,7 @@ class ForgejoDestination:
 
 
 
-    @deprecated("This cannot be used to create api tokens when the API was authorised using an access token")
+    @deprecated("WARNING: This cannot be used to create api tokens when the API was authorised using an access token")
     def forgejo_add_temp_api_token_for_user(self, username:str, token_name:str, desired_scopes:dict[str] = None) -> str:
         """Create an Access Token for the user (if using sudo)"""
         #Example desired_scopes=["read:user","write:user"]

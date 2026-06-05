@@ -1,10 +1,12 @@
 
 import configparser
 from dataclasses import dataclass
+import datetime
 
 
 @dataclass(frozen=True)
 class MigrationConfig:
+    MIGRATION_DATE_TIME : str
     USE_EXISTING_TEAMS:bool
     ADD_EMPTY_TEAMS_TO_ORGANIZATIONS:bool
     ADD_EMPTY_TEAMS_TO_REPOSITORIES:bool
@@ -16,6 +18,7 @@ class MigrationConfig:
     @classmethod
     def from_config(cls, config:configparser.RawConfigParser, section:str="migrate"):
         return cls(
+            MIGRATION_DATE_TIME = f'{datetime.datetime.now():%Y%m%d_%H:%M:%S}',
             USE_EXISTING_TEAMS = config.getboolean(section, option="use_existing_teams", fallback=False),
             ADD_EMPTY_TEAMS_TO_ORGANIZATIONS = config.getboolean(section, option="add_empty_teams_to_organizations", fallback=False),
             ADD_EMPTY_TEAMS_TO_REPOSITORIES = config.getboolean(section, option="add_empty_teams_to_repositories", fallback=False),
