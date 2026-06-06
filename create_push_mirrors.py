@@ -23,11 +23,11 @@ import configparser
 
 from docopt import docopt
 
-from fg_migration import fg_print
-from fg_migration.config_types import ForgejoConfig, GitLabConfig
-from fg_migration.forgeo_types import ForgejoApiBuilder
-from fg_migration.gitlab import GitLabApiBuilder
-from fg_migration.push_mirror_creator import PushMirrorCreator
+from fg_migration.utils import fg_print
+from fg_migration.core.config_types import ForgejoConfig, GitLabConfig
+from fg_migration.adapters.forgeo_types import ForgejoApiBuilder
+from fg_migration.adapters.gitlab import GitLabApiBuilder
+from fg_migration.services.push_mirror_creator import PushMirrorCreator
 
 SCRIPT_VERSION = "0.2"
 

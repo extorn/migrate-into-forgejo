@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 
 
-from fg_migration.utils import name_clean
+from fg_migration.utils.utils import name_clean
 
 # Note: I created these types to make it explict what fields are currently being handled by the migration
 #       In theory we could either use the Forgejo types directly, or extend them e.g. class CanonicalUser(pyforgejo.User)

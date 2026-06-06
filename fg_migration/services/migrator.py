@@ -7,14 +7,15 @@ import datetime as datetime
 from pyforgejo import CreateTeamOptionPermission, Organization, Repository, Team, User
 import requests
 
-from fg_migration import AccessLevelAccessMappingStrategy, fg_print
-from fg_migration.access_mapping_strategy import AccessMappingStrategy
-from fg_migration.forgeo_types import ForgejoApiBuilder, IterativeFetchError
-from fg_migration.migration_source_type import MigrationSource
-from fg_migration.canonical_types import CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoMembership, CanonicalRepoOwner, CanonicalSystemUser, CanonicalUser
-from fg_migration.forgjo import ForgejoDestination, ForgejoRepositoryRole, ForgejoRolePermissionDefinition, ForgejoTeamDefinition
-from fg_migration.config_types import MigrationConfig
-from fg_migration.utils import name_clean
+from fg_migration.utils import fg_print
+from fg_migration.strategies import access_level_strategy
+from fg_migration.strategies.access_mapping_strategy import AccessMappingStrategy
+from fg_migration.adapters.forgeo_types import ForgejoApiBuilder, IterativeFetchError
+from fg_migration.core.migration_source_type import MigrationSource
+from fg_migration.core.canonical_types import CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoMembership, CanonicalRepoOwner, CanonicalSystemUser, CanonicalUser
+from fg_migration.adapters.forgjo import ForgejoDestination, ForgejoRepositoryRole, ForgejoRolePermissionDefinition, ForgejoTeamDefinition
+from fg_migration.core.config_types import MigrationConfig
+from fg_migration.utils.utils import name_clean
 
 
 class Migrator:
@@ -32,7 +33,7 @@ class Migrator:
         self.migration_config = migration_config
         self.migration_source = migration_source
         self.fg_api_builder = fg_api_builder
-        self.access_mapping_strategy = AccessLevelAccessMappingStrategy(migration_dest=self.migration_dest)
+        self.access_mapping_strategy = access_level_strategy(migration_dest=self.migration_dest)
         self.run_logic_checks()
 
     

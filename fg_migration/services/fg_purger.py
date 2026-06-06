@@ -1,8 +1,8 @@
 from pyforgejo import PyforgejoApi
 from pyforgejo.core import ApiError
 
-from fg_migration import fg_print
-from fg_migration.config_types import ForgejoConfig
+from fg_migration.utils import fg_print
+from fg_migration.core.config_types import ForgejoConfig
 
 
 class ForgejoPurger:

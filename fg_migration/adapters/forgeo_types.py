@@ -10,9 +10,9 @@ from typing import Callable, TypeVar, Iterator, override
 from pyforgejo import ApiError, CreateTeamOptionPermission, PyforgejoApi, Team
 import pyforgejo
 
-from fg_migration import fg_print
-from fg_migration.config_types import ForgejoConfig
-from fg_migration.utils import diff_dataclasses
+from fg_migration.utils import fg_print
+from fg_migration.core.config_types import ForgejoConfig
+from fg_migration.utils.utils import diff_dataclasses
 from httpx import Client as HttpxClient
 
 class ForgejoApiBuilder:

@@ -9,11 +9,11 @@ import gitlab.v4.objects
 import requests
 import yaml
 
-from fg_migration import fg_print
-from fg_migration.forgjo import ForgejoRepositoryRole
-from fg_migration.migration_source_type import MigrationSource
-from fg_migration.canonical_types import CanonicalGpgKey, CanonicalGroupMembership, CanonicalKey, CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoMembership, CanonicalRepoMemberships, CanonicalSystemUser, CanonicalTeam, CanonicalUser
-from fg_migration.config_types import GitLabMigrationConfig, GitLabConfig
+from fg_migration.utils import fg_print
+from fg_migration.adapters.forgjo import ForgejoRepositoryRole
+from fg_migration.core.migration_source_type import MigrationSource
+from fg_migration.core.canonical_types import CanonicalGpgKey, CanonicalGroupMembership, CanonicalKey, CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoMembership, CanonicalRepoMemberships, CanonicalSystemUser, CanonicalTeam, CanonicalUser
+from fg_migration.core.config_types import GitLabMigrationConfig, GitLabConfig
 
 
 class IterativeFetchError(Exception):

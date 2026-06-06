@@ -1,16 +1,7 @@
 
 from dataclasses import asdict
-import os
 import re
 
-import gitlab
-import requests
-
-import gitlab  # pip install python-gitlab
-import gitlab.v4.objects
-
-from fg_migration import fg_print
-from fg_migration.config_types import GitLabConfig
 
 
 def diff_dataclasses(before, after) -> dict:

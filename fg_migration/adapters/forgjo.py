@@ -17,10 +17,10 @@ from pyforgejo import ConflictError, CreateTeamOptionPermission, GpgKey, Issue, 
 from pyforgejo.core.api_error import ApiError
 import yaml
 
-from fg_migration import fg_print
-from fg_migration.canonical_types import CanonicalOrganization, CanonicalRepo, CanonicalRepoMembership, CanonicalRepoOwner, CanonicalSystemUser
-from fg_migration.config_types import ForgejoConfig
-from fg_migration.forgeo_types import ApiPaginator, ForgejoRepositoryRole, ForgejoRolePermissionDefinition, ForgejoTeamDefinition, ForgejoTeamRoleBuilder, ForgejoTeamRoleMapper, IterativeFetchError
+from fg_migration.utils import fg_print
+from fg_migration.core.canonical_types import CanonicalOrganization, CanonicalRepo, CanonicalRepoMembership, CanonicalRepoOwner, CanonicalSystemUser
+from fg_migration.core.config_types import ForgejoConfig
+from fg_migration.adapters.forgeo_types import ApiPaginator, ForgejoRepositoryRole, ForgejoRolePermissionDefinition, ForgejoTeamDefinition, ForgejoTeamRoleBuilder, ForgejoTeamRoleMapper, IterativeFetchError
 
 
 class ForgejoDestination:

@@ -25,14 +25,14 @@ import configparser
 from docopt import docopt
 
 
-from fg_migration.forgeo_types import ForgejoApiBuilder
-from fg_migration.migration_source_type import MigrationSource
-from fg_migration.config_types import ForgejoConfig, GitLabConfig, GitLabMigrationConfig, MigrationConfig
-from fg_migration.forgjo import ForgejoDestination
-from fg_migration.gitlab import GitLabApiBuilder, GitLabMigrationSource
-from fg_migration.migrator import Migrator
+from fg_migration.adapters.forgeo_types import ForgejoApiBuilder
+from fg_migration.core.migration_source_type import MigrationSource
+from fg_migration.core.config_types import ForgejoConfig, GitLabConfig, GitLabMigrationConfig, MigrationConfig
+from fg_migration.adapters.forgjo import ForgejoDestination
+from fg_migration.adapters.gitlab import GitLabApiBuilder, GitLabMigrationSource
+from fg_migration.services.migrator import Migrator
 
-from fg_migration import fg_print
+from fg_migration.utils import fg_print
 
 SCRIPT_VERSION = "1.0.0-alpha.2"
 

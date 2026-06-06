@@ -2,8 +2,8 @@ from abc import ABC, abstractmethod
 
 from pyforgejo import Team
 
-from fg_migration.canonical_types import CanonicalOrganization, CanonicalRepo
-from fg_migration.migration_source_type import MigrationSource
+from fg_migration.core.canonical_types import CanonicalOrganization, CanonicalRepo
+from fg_migration.core.migration_source_type import MigrationSource
 
 
 class AccessMappingStrategy(ABC):

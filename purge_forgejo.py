@@ -19,10 +19,10 @@ import configparser
 from pyforgejo import PyforgejoApi
 from docopt import docopt
 from click import confirm
-from fg_migration import fg_print
-from fg_migration.config_types import ForgejoConfig
-from fg_migration.fg_purger import ForgejoPurger
-from fg_migration.forgeo_types import ForgejoApiBuilder
+from fg_migration.utils import fg_print
+from fg_migration.core.config_types import ForgejoConfig
+from fg_migration.services.fg_purger import ForgejoPurger
+from fg_migration.adapters.forgeo_types import ForgejoApiBuilder
 
 SCRIPT_VERSION = "1.0.0-alpha.1"
 
