@@ -410,7 +410,7 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
         if repository_role.is_custom:
             nearest_repository_role = None
             if fuzzy:
-                fg_print.warning(f"{migration_source.getSourceSystemName()} Role:"
+                fg_print.warning(f"{migration_source.get_source_system_name()} Role:"
                                  f"Forgejo Team Mapping missing for {repository_role}."
                                   " Using fuzzy matching")
                 nearest_repository_role = migration_source.get_nearest_repository_role(
@@ -520,7 +520,7 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
         if repository_role.is_custom:
             nearest_repository_role = None
             if fuzzy:
-                fg_print.warning(f"{migration_source.getSourceSystemName()} Role:Forgejo Team"
+                fg_print.warning(f"{migration_source.get_source_system_name()} Role:Forgejo Team"
                                  f" Mapping missing for {repository_role}. Using fuzzy matching")
 
                 nearest_repository_role = migration_source.get_nearest_repository_role(

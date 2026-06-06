@@ -326,7 +326,7 @@ class Migrator:
         # read all users
         users: list[CanonicalSystemUser] = self.migration_source.list_system_users()
 
-        fg_print.info(f"Found {len(users)} {self.migration_source.getSourceSystemName()} users")
+        fg_print.info(f"Found {len(users)} {self.migration_source.get_source_system_name()} users")
 
         user : CanonicalSystemUser
         for user in users:
@@ -429,7 +429,7 @@ class Migrator:
         canonical_organizations: CanonicalOrganizations = self.migration_source.list_organizations()
 
         fg_print.info(f"Found {len(canonical_organizations.members)} "
-                      f"{self.migration_source.getSourceSystemName()}"
+                      f"{self.migration_source.get_source_system_name()}"
                       f" {canonical_organizations.source_type}")
 
         group_names = [org.username for org in canonical_organizations.members]

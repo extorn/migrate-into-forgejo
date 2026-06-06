@@ -63,7 +63,7 @@ class ForgejoDestination:
                                              dict[ForgejoRepositoryRole,
                                                   ForgejoTeamDefinition]]:
         """Load the User roles and mappings from config files"""
-        with open(path, encoding="UTF8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
 
         role_definitions = {}

@@ -28,7 +28,8 @@ class GitLabApiPaginator:
     items_type:str
     retrieval_detail:str
 
-    def __init__(self, gl_api:gitlab.Gitlab, page_size:int=50, items_type:str="Items", retrieval_detail:str=""):
+    def __init__(self, gl_api:gitlab.Gitlab, page_size:int=50,
+                 items_type:str="Items", retrieval_detail:str=""):
         self.gl_api = gl_api
         self.max_page_size = page_size
         self.items_type = items_type
@@ -36,7 +37,7 @@ class GitLabApiPaginator:
 
     def iterate(self, fetch_page_from_api: Callable[[gitlab.Gitlab, int, int], list[T]],
         ) -> Iterator[T]:
-        
+
         page_idx = 1
         try:
             while True:
@@ -56,7 +57,8 @@ class GitLabApiPaginator:
                     break
         except Exception as e:
             detail = self._get_exception_detail(e)
-            msg = f"Failed to retrieve existing {self.items_type} page[{page_idx}]{self.retrieval_detail} {detail}"
+            msg = f"Failed to retrieve existing {self.items_type} page[{page_idx}]" \
+                  f"{self.retrieval_detail} {detail}"
             fg_print.error(msg)
             raise IterativeFetchError(msg) from e
 
@@ -65,12 +67,13 @@ class GitLabApiBuilder:
     config : GitLabConfig
 
     def __init__(self, gitlab_config:GitLabConfig):
-            self.config = gitlab_config
+        self.config = gitlab_config
 
     def build_gitlab_api_client(self) -> gitlab.Gitlab:
         session = requests.Session()
         # add client authentication if cert and key are provided in the config
-        if(self.config.GITLAB_CLIENT_AUTH_CERT != None and self.config.GITLAB_CLIENT_AUTH_KEY != None):
+        if(self.config.GITLAB_CLIENT_AUTH_CERT is not None
+           and self.config.GITLAB_CLIENT_AUTH_KEY is not None):
             cert_path = self.config.GITLAB_CLIENT_AUTH_CERT
             key_path = self.config.GITLAB_CLIENT_AUTH_KEY
             session.cert = (cert_path, key_path)
@@ -108,7 +111,7 @@ class GitLabMigrationSource(MigrationSource):
     access_level_role_map : dict[int,ForgejoRepositoryRole]
     BOT_REGEX = re.compile(r"^project_\d{2}_bot_[a-zA-Z0-9]{32}$")
 
-    def __init__(self, 
+    def __init__(self,
                  gitlab_api:gitlab.Gitlab,
                  gitlab_config:GitLabConfig,
                  gitlab_migration_config:GitLabMigrationConfig):
@@ -118,7 +121,7 @@ class GitLabMigrationSource(MigrationSource):
         self.access_level_role_map = self._load_access_levels_roles_map(path=self.gitlab_migration_config.ACCESS_LEVELS_TO_FORGEJO_ROLES_MAP_FILE_PATH)
 
     def _load_access_levels_roles_map(self, path: str) -> dict[int,ForgejoRepositoryRole]:
-        with open(path) as f:
+        with open(path, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
 
         access_level_role_map : dict[int,ForgejoRepositoryRole] = {}
@@ -152,7 +155,7 @@ class GitLabMigrationSource(MigrationSource):
                 per_page=limit,
             )
         )
-    
+
 
 
     def _iter_all_groups_of_project(self, project: gitlab.v4.objects.Project) -> Iterator[gitlab.v4.objects.Group]:
@@ -174,7 +177,7 @@ class GitLabMigrationSource(MigrationSource):
                 per_page=limit,
             )
         )
-    
+
 
 
     def _iter_all_members_of_group(self, group: gitlab.v4.objects.Group) -> Iterator[gitlab.v4.objects.GroupMember]:
@@ -207,7 +210,7 @@ class GitLabMigrationSource(MigrationSource):
                 per_page=limit,
             )
         )
-    
+
 
     def _iter_all_gpg_keys_of_user(self, user:gitlab.v4.objects.User) -> Iterator[gitlab.v4.objects.UserGPGKey]:
         paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="UserGPGKeys")
@@ -217,7 +220,7 @@ class GitLabMigrationSource(MigrationSource):
                 per_page=limit,
             )
         )
-    
+
 
 
     def _iter_all_public_keys_of_user(self, user:gitlab.v4.objects.User) -> Iterator[gitlab.v4.objects.UserKey]:
@@ -251,7 +254,7 @@ class GitLabMigrationSource(MigrationSource):
         else:
             fg_print.error(f"Unsupported namespace kind {project.namespace['kind']} for project {project.name}, skipping import!")
             return None
-        
+
 
 
     def _is_ignore_gitlab_user(self, username : str) -> bool:
@@ -260,14 +263,14 @@ class GitLabMigrationSource(MigrationSource):
         else:
             fg_print.debug(f"username {username} not in ignored users list {list(self.gitlab_migration_config.IGNORED_GITLAB_SYSTEM_USERS)} and does not match bot regex, will not ignore")
         return False
-    
 
-    
+
+
     def _build_or_extract_email(self, user: gitlab.v4.objects.User) -> str:
         """build an email address for a user, if the email is not available, we use a dummy email address based on the username"""
-        
+
         # Some gitlab instances do not publish user emails, so we use a dummy email
-        
+
         try:
             return user.email
         except AttributeError:
@@ -285,9 +288,9 @@ class GitLabMigrationSource(MigrationSource):
 
 
     @override
-    def getSourceSystemName(self) -> str:
+    def get_source_system_name(self) -> str:
         return self.source_system
-    
+
 
 
     @override
@@ -314,7 +317,7 @@ class GitLabMigrationSource(MigrationSource):
 
                 if owner_name is None:
                     continue # unable to continue with this project
-                
+
                 is_individual = self._get_is_individual(project)
                 # clone_url = project.web_url
 
@@ -323,7 +326,7 @@ class GitLabMigrationSource(MigrationSource):
                     fg_print.error(f"Could not extract repository name for project {project.name} with path {project.path_with_namespace}, skipping import!")
                     continue
                 clone_url = self._build_gitlab_repo_url(owner_name, repo_name)
-                
+
                 is_private = (project.visibility == "private" or project.visibility == "internal")
                 auth_password=self.gitlab_config.GITLAB_ADMIN_PASS
                 auth_username=self.gitlab_config.GITLAB_ADMIN_USER
@@ -332,7 +335,7 @@ class GitLabMigrationSource(MigrationSource):
                 fg_print.debug(f"{project.path} : {project.name}")
                 repo = CanonicalRepo(source_system=self.source_system, source_id=project.get_id(),
                                     is_individual=is_individual, username=project.path, name=project.name,
-                                    owner_name=owner_name, clone_url=clone_url, 
+                                    owner_name=owner_name, clone_url=clone_url,
                                     is_private=is_private,description=project.description,
                                     auth_username=auth_username,auth_password=auth_password,auth_token=auth_token,
                                     source_type="Project")
@@ -341,7 +344,7 @@ class GitLabMigrationSource(MigrationSource):
         except IterativeFetchError:
             fg_print.error(f"Failed to load all Projects. Import will need to be run again for Repositories")
         return repos
-    
+
 
 
     def _get_gitlab_repo_name(self, project: gitlab.v4.objects.Project) -> str|None:
@@ -357,15 +360,15 @@ class GitLabMigrationSource(MigrationSource):
             )
             return None
         return path_parts[1]
-    
-    
-    
+
+
+
     def _build_gitlab_repo_url(self, owner: str, repo: str) -> str:
         if self.gitlab_config.GITLAB_SYNC_CONNECTION_TYPE == "ssh":
             return f"git@{self.gitlab_config.GITLAB_URL.replace('https://', '').replace('http://', '')}:{owner}/{repo}.git"
         else:
             return f"{self.gitlab_config.GITLAB_URL}/{owner}/{repo}.git"
-    
+
 
 
     def _list_repository_accessors_inherited(self, project: gitlab.v4.objects.Project, repository:CanonicalRepo) -> list[CanonicalRepoMembership]:
@@ -397,7 +400,7 @@ class GitLabMigrationSource(MigrationSource):
         except IterativeFetchError:
             fg_print.error(f"Failed to load all Groups for Project {project.path}. Import will need to be run again for Repository Accessors")
         return repo_accessors_members
-    
+
 
 
     def _list_repository_accessors_inherited(self, project: gitlab.v4.objects.Project, repository:CanonicalRepo) -> list[CanonicalRepoMembership]:
@@ -406,7 +409,7 @@ class GitLabMigrationSource(MigrationSource):
 
         # project_members: list[gitlab.v4.objects.ProjectMember] = project.members.list(get_all=True)
         project_member : gitlab.v4.objects.ProjectMember
-        
+
         try:
             for project_member in self._iter_all_members_of_project(project=project):
                 if self._is_ignore_gitlab_user(project_member.username):
@@ -429,14 +432,14 @@ class GitLabMigrationSource(MigrationSource):
         fg_print.debug(f"Listing accessors for project id {repo.source_id}, project {project.path}  [{project.name}]")
         repo_accessors_members : list[CanonicalRepoMembership] = []
         repo_accessors = CanonicalRepoMemberships(source_system=self.source_system, source_type="Users", members=repo_accessors_members)
-        
+
         if not repo.is_individual:
             # These are INHERITED accessors (of the gitlab group that owns this project)
             repo_accessors_members += self._list_repository_accessors_inherited(project=project, repository=repo)
-            
+
         # These are DIRECT accessors
         repo_accessors_members += self._list_repository_accessors_inherited(project=project, repository=repo)
-        
+
         return repo_accessors
 
 
@@ -539,21 +542,21 @@ class GitLabMigrationSource(MigrationSource):
                     avatar_url = user.avatar_url
                 except AttributeError:
                     avatar_url = None
-            
+
                 emailAddress : str = self._build_or_extract_email(user)
                 try:
                     canonical_keys = [CanonicalKey(name=key.title, key=key.key) for key in self._iter_all_public_keys_of_user(user)]
                     canonical_gpg_keys : list[CanonicalGpgKey] = []
                     for gpg_key in self._iter_all_gpg_keys_of_user(user):
                         key_id = getattr(gpg_key, "key_id", None)
-                        
-                        key_content = (getattr(gpg_key, "public_key", None) 
+
+                        key_content = (getattr(gpg_key, "public_key", None)
                                     or getattr(gpg_key, "key", None))
                         canonical_gpg_keys.append(CanonicalGpgKey(name=key_id, armored_public_key=key_content, armored_signature=None))
                 except IterativeFetchError:
                     fg_print.error(f"Failed to load keys for User, User will not be imported and import will need to be run again for Users.")
                     continue
-                    
+
                 canonical_users.append(CanonicalSystemUser(gpg_keys=canonical_gpg_keys,keys=canonical_keys,
                                                         email=emailAddress, full_name=user.name,
                                                         username=user.username, source_system=self.source_system, avatar_url=avatar_url))
@@ -562,7 +565,7 @@ class GitLabMigrationSource(MigrationSource):
 
         return canonical_users
 
-    
+
 
     @override
     def get_repository_role(self, source_access_level:str) -> ForgejoRepositoryRole:
@@ -588,9 +591,9 @@ class GitLabMigrationSource(MigrationSource):
         access_level_int = int(source_access_level)
         known_access_levels = sorted(self.access_level_role_map.keys())
         closest_access_level: int | None = None
-        
+
         # Because we cache the custom roles created, the nearest role may be one we've already custom created
-        
+
         if(allow_upgrade):
             larger = min((x for x in known_access_levels if x > access_level_int), default=None)
             if not larger is None:
@@ -603,5 +606,5 @@ class GitLabMigrationSource(MigrationSource):
 
         if closest_access_level is None:
             return None
-        
+
         return self.get_repository_role(str(closest_access_level))
