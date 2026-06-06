@@ -1,8 +1,7 @@
-
+"""Only contains the Migrator - a migration engine from system x to Forgejo"""
 import base64
-import datetime as datetime
 
-from pyforgejo import Organization, Repository, Team, User
+from pyforgejo import Repository
 import requests
 
 from fg_migration.strategies.access_level_strategy import AccessLevelAccessMappingStrategy
@@ -10,41 +9,51 @@ from fg_migration.utils import fg_print
 from fg_migration.strategies.access_mapping_strategy import AccessMappingStrategy
 from fg_migration.adapters.forgeo_types import ForgejoApiBuilder, IterativeFetchError
 from fg_migration.core.migration_source_type import MigrationSource
-from fg_migration.core.canonical_types import CanonicalOrganizations, CanonicalRepo, CanonicalRepoOwner, CanonicalSystemUser
+from fg_migration.core.canonical_types import (CanonicalOrganizations, CanonicalRepo,
+                                               CanonicalSystemUser)
 from fg_migration.adapters.forgjo import ForgejoDestination
 from fg_migration.core.config_types import MigrationConfig
 
 
 class Migrator:
+    """This class is the migration engine mapping data from MigrationSource implementation
+        to the ForgejoDestination implementation"""
 
     migration_config : MigrationConfig
     migration_dest : ForgejoDestination
     migration_source: MigrationSource
     fg_api_builder : ForgejoApiBuilder
     access_mapping_strategy: AccessMappingStrategy
-    
-    def __init__(self, 
-                 migration_config:MigrationConfig, migration_source:MigrationSource, 
+
+    def __init__(self,
+                 migration_config:MigrationConfig, migration_source:MigrationSource,
                  migration_dest:ForgejoDestination, fg_api_builder:ForgejoApiBuilder):
         self.migration_dest = migration_dest
         self.migration_config = migration_config
         self.migration_source = migration_source
         self.fg_api_builder = fg_api_builder
-        self.access_mapping_strategy = AccessLevelAccessMappingStrategy(migration_dest=self.migration_dest, migration_config=self.migration_config)
+        self.access_mapping_strategy = AccessLevelAccessMappingStrategy(
+                                            migration_dest=self.migration_dest,
+                                            migration_config=self.migration_config)
         self.run_logic_checks()
 
-    
+
 
     def run_logic_checks(self):
-        
+        """Run a few checks on configuration before the migration runs"""
+
         source_roles = self.migration_source.list_mapped_forgejo_repository_roles()
         destination_roles = self.migration_dest.role_definitions.keys()
         missing_roles = source_roles - destination_roles
         if len(missing_roles) > 0:
-            fg_print.error(f"Migration cannot be run, the following roles are mapped from the source system but missing in the destination system: {missing_roles}. Please add these roles to the destination system or remove the mapping for these roles in the migration configuration and try again.")
+            fg_print.error("Migration cannot be run, the following roles are mapped from the "
+                           f"source system but missing in the destination system: {missing_roles}."
+                           " Please add these roles to the destination system or remove the mapping"
+                           " for these roles in the migration configuration and try again.")
             raise Exception("Migration cannot be run, missing mapped roles in destination system")
-    
-    #TODO reenable this code and update it to work (it isn't strictly required, but someone may find it useful to customise what happens normally in the auto-migrate)        
+
+    #TODO reenable this code and update it to work (it isn't strictly required,
+    #     but someone may find it useful to customise what happens normally in the auto-migrate)
 
     # def _import_project_labels(
     #     migration_dest: ForgejoDestination,
@@ -56,7 +65,8 @@ class Migrator:
     #     forgejo_safe_project_name = name_clean(project_name)
     #     """import labels for a repository"""
     #     for label in labels:
-    #         if not self.migration_dest.forgejo_label_exists(owner=forgejo_safe_project_owner_name, repo=forgejo_safe_project_name, labelname=label.name):  # need this because status 422 returned for conflict, not 409 
+    #         if not self.migration_dest.forgejo_label_exists(owner=forgejo_safe_project_owner_name,
+    #              repo=forgejo_safe_project_name, labelname=label.name):  # need this because status 422 returned for conflict, not 409
     #             try:
     #                 self.migration_dest.fg_api.issue.create_label(owner=forgejo_safe_project_owner_name, repo=forgejo_safe_project_name, name=label.name, color=label.color, description=label.description)
     #                 fg_print.info(f"Label {label.name} imported!")
@@ -87,9 +97,9 @@ class Migrator:
     #       pass
     #     for milestone in milestones:
     #         # Note: forgejo_add_milestone appends to the cached list of forgejo_milestones too for efficiency.
-    #         success = self.migration_dest.forgejo_add_milestone(owner=forgejo_safe_project_owner_name, repo=forgejo_safe_project_name, 
-    #                                         forgejo_milestones=forgejo_milestones, title=milestone.title, 
-    #                                         description=milestone.description, due_date=milestone.due_date, 
+    #         success = self.migration_dest.forgejo_add_milestone(owner=forgejo_safe_project_owner_name, repo=forgejo_safe_project_name,
+    #                                         forgejo_milestones=forgejo_milestones, title=milestone.title,
+    #                                         description=milestone.description, due_date=milestone.due_date,
     #                                         state=milestone.state)
     #         if not success:
     #             continue
@@ -132,22 +142,22 @@ class Migrator:
     #                 assignees.append(name_clean(tmp_assignee["username"]))
 
     #             # Get milestone id for the issue, if milestone is assigned to the issue in GitLab.
-    #             # # We need to get the milestone id for the milestone title from Forgejo, because the 
-    #             # milestone id in GitLab is not the same as the milestone id in Forgejo, and we need 
-    #             # the milestone id for the assignment of the milestone to the issue in Forgejo. 
-    #             # If there is no milestone with the same title in Forgejo, we do not assign a milestone 
+    #             # # We need to get the milestone id for the milestone title from Forgejo, because the
+    #             # milestone id in GitLab is not the same as the milestone id in Forgejo, and we need
+    #             # the milestone id for the assignment of the milestone to the issue in Forgejo.
+    #             # If there is no milestone with the same title in Forgejo, we do not assign a milestone
     #             # to the issue in Forgejo, because there is no equivalent milestone in Forgejo.
     #             forgejo_milestoneId = None
     #             missing_milestone = False
     #             if issue.milestone is not None:
     #                 forgejo_milestoneId = self.migration_dest.find_forgejo_milestone_id_by_title(forgejo_milestones, issue.milestone["title"]) # N.b. gitlab issue so dict
     #                 if forgejo_milestoneId is None:
-    #                     # if this happens, something went wrong with the milestone import, because the milestone assigned 
-    #                     # to the issue in GitLab should have been imported to Forgejo in the milestone import step before 
-    #                     # the issue import step, so we print an error and skip the milestone assignment for this issue, 
-    #                     # but we continue with the import of the issue without the milestone assignment, because the 
-    #                     # existence of the milestone is not a failure for the import of the issue, we just skip the 
-    #                     # milestone assignment for this issue and continue with the import of the issue without the 
+    #                     # if this happens, something went wrong with the milestone import, because the milestone assigned
+    #                     # to the issue in GitLab should have been imported to Forgejo in the milestone import step before
+    #                     # the issue import step, so we print an error and skip the milestone assignment for this issue,
+    #                     # but we continue with the import of the issue without the milestone assignment, because the
+    #                     # existence of the milestone is not a failure for the import of the issue, we just skip the
+    #                     # milestone assignment for this issue and continue with the import of the issue without the
     #                     # milestone assignment.
     #                     fg_print.error(
     #                         f"Milestone {issue.milestone['title']} assigned to issue {issue.title} does not exist in Forgejo, skipping milestone assignment for this issue!",
@@ -176,7 +186,7 @@ class Migrator:
     #                     break
     #             if missing_label:
     #                 continue # stop the import of this issue (to allow milestone import to be fixed and re-run not to create duplicate issues)
-                    
+
     #             try:
     #                 self.migration_dest.fg_api.issue.create_issue(owner=forgejo_safe_project_owner, repo=forgejo_safe_project_name,
     #                                         title=issue.title, body=issue.description,
@@ -195,26 +205,39 @@ class Migrator:
 
     def _run_inbuilt_repo_import(self, source_repo: CanonicalRepo):
         """Run the inbuilt import on the project"""
-        
-        # get either the Forgejo User or Organization name as appropriate for this gitlab project owner
-        forgejo_owner = self.migration_dest._resolve_forgejo_repo_owner(source_repo=source_repo)
-        
+
+        # get either the Forgejo User or Organization name as appropriate
+        # for this gitlab project owner
+        forgejo_owner = self.migration_dest.resolve_forgejo_repo_owner(source_repo=source_repo)
+
         if forgejo_owner is None:
-            fg_print.error(f"Importing {source_repo.source_system} {source_repo.name}. Failed to locate Forgejo repository owner {source_repo.get_safe_owner_name()} for repository {source_repo.get_safe_username()}, skipping import!",
-                        f"Importing {source_repo.source_system} {source_repo.name}. Failed to locate Forgejo repository owner for repository {source_repo.get_safe_username()}")
+            fg_print.error(
+                f"Importing {source_repo.source_system} {source_repo.name}."
+                f" Failed to locate Forgejo repository owner {source_repo.get_safe_owner_name()}"
+                f" for repository {source_repo.get_safe_username()}, skipping import!",
+                f"Importing {source_repo.source_system} {source_repo.name}."
+                f" Failed to locate Forgejo repository owner for repository "
+                f"{source_repo.get_safe_username()}")
             return
-    
-        
+
+
         if not forgejo_owner.is_complete():
-            fg_print.error(f"Importing {source_repo.source_system} {source_repo.name}. Located incomplete Forgejo repository owner {source_repo.get_safe_owner_name()} for repository {source_repo.get_safe_username()}, skipping import!",
-                        f"Importing {source_repo.source_system} {source_repo.name}. Located incomplete Forgejo repository owner for repository {source_repo.get_safe_username()}")
+            fg_print.error(
+                f"Importing {source_repo.source_system} {source_repo.name}. Located"
+                f" incomplete Forgejo repository owner {source_repo.get_safe_owner_name()}"
+                f" for repository {source_repo.get_safe_username()}, skipping import!",
+                f"Importing {source_repo.source_system} {source_repo.name}. "
+                f"Located incomplete Forgejo repository owner for repository"
+                f" {source_repo.get_safe_username()}")
             return
 
 
-        if not self.migration_dest.forgejo_repo_exists(owner_username=forgejo_owner.username, repo=source_repo):
-            
-            fg_print.info(f"Importing {source_repo.source_system} {source_repo.source_type} {source_repo.name} from {source_repo.clone_url}...")
-            
+        if not self.migration_dest.forgejo_repo_exists(owner_username=forgejo_owner.username,
+                                                       repo=source_repo):
+
+            fg_print.info(f"Importing {source_repo.source_system} {source_repo.source_type}"
+                          f" {source_repo.name} from {source_repo.clone_url}...")
+
             try:
                 imported_repo : Repository = self.migration_dest.repo_migrate(
                                             source_repo=source_repo,
@@ -228,10 +251,15 @@ class Migrator:
                                             releases=True,
                                             wiki=True,
                                     )
-                fg_print.info(f"{source_repo.source_system} {source_repo.source_type} {source_repo.get_safe_username()} imported from {source_repo.clone_url} and available at {imported_repo.clone_url}!")
+                fg_print.info(
+                    f"{source_repo.source_system} {source_repo.source_type}"
+                    f" {source_repo.get_safe_username()} imported from {source_repo.clone_url}"
+                    f" and available at {imported_repo.clone_url}!")
             except Exception as e:
                 detail = self.migration_dest._get_exception_detail(e)
-                fg_print.error(f"{source_repo.source_system} {source_repo.source_type} {source_repo.get_safe_username()} import failed from url {source_repo.clone_url} : {detail}")  
+                fg_print.error(f"{source_repo.source_system} {source_repo.source_type}"
+                               f" {source_repo.get_safe_username()} import failed from url"
+                               f" {source_repo.clone_url} : {detail}")
 
 
 
@@ -240,8 +268,10 @@ class Migrator:
         user:CanonicalSystemUser,
     ):
         """import public keys for a user"""
-        iter_forgejo_keys = self.migration_dest.iter_forgejo_user_keys(username=user.get_safe_username())
-        iter_forgejo_gpg_keys = self.migration_dest.iter_forgejo_user_gpg_keys(username=user.get_safe_username())
+        iter_forgejo_keys = self.migration_dest.iter_forgejo_user_keys(
+                                                    username=user.get_safe_username())
+        iter_forgejo_gpg_keys = self.migration_dest.iter_forgejo_user_gpg_keys(
+                                                    username=user.get_safe_username())
 
         #
         # SSH keys
@@ -256,9 +286,12 @@ class Migrator:
                     if key.key not in forgejo_key_values]
         for key in new_keys:
             # Import key
-            new_key = self.migration_dest.forgejo_add_user_key(username=user.get_safe_username(), key_name=key.name, key_content=key.key)
+            new_key = self.migration_dest.forgejo_add_user_key(
+                                                username=user.get_safe_username(),
+                                                key_name=key.name, key_content=key.key)
             if new_key is not None:
-                fg_print.info(f"For {user.source_system} User {user.username} Added new Public Key {key.name} : {new_key.key}")
+                fg_print.info(f"For {user.source_system} User {user.username}"
+                              f" Added new Public Key {key.name} : {new_key.key}")
             # if new_key is not None:
             #     forgejo_keys.append(new_key)
 
@@ -275,9 +308,14 @@ class Migrator:
                 if key.armored_public_key not in forgejo_gpg_key_values]
         for gpg_key in new_gpg_keys:
             # Import key
-            new_key = self.migration_dest.forgejo_add_gpg_key(username=user.get_safe_username(), key_name=gpg_key.name, armored_public_key=gpg_key.armored_public_key, armored_signature=gpg_key.armored_signature)
+            new_key = self.migration_dest.forgejo_add_gpg_key(
+                                            username=user.get_safe_username(),
+                                            key_name=gpg_key.name,
+                                            armored_public_key=gpg_key.armored_public_key,
+                                            armored_signature=gpg_key.armored_signature)
             if new_key is not None:
-                fg_print.info(f"For {user.source_system} User {user.username} Added new GPG Key {gpg_key.name} : {new_key.public_key}")
+                fg_print.info(f"For {user.source_system} User {user.username}"
+                              f" Added new GPG Key {gpg_key.name} : {new_key.public_key}")
             # if new_key is not None:
             #     forgejo_gpg_keys.append(new_key)
 
@@ -292,22 +330,25 @@ class Migrator:
 
         user : CanonicalSystemUser
         for user in users:
-            
-            fg_print.info(f"Importing {user.source_system} user {user.username} as {user.get_safe_username()}...")
+
+            fg_print.info(f"Importing {user.source_system} user {user.username}"
+                          f" as {user.get_safe_username()}...")
 
             fg_print.info(f"Found {len(user.gpg_keys)} gpg keys for user {user.username}")
             fg_print.info(f"Found {len(user.keys)} public keys for user {user.username}")
 
-            # Note: newly created users will have the password field updated to their new temporary password
-            isInForgejo = self.migration_dest.forgejo_add_user(user=user, notify=notify)
-            if not isInForgejo:
+            # Note: newly created users will have the password field
+            #       updated to their new temporary password
+            is_in_forgejo = self.migration_dest.forgejo_add_user(user=user, notify=notify)
+            if not is_in_forgejo:
                 # something went wrong with the user import. can't do any more for this user.
                 continue
 
             if user.avatar_url is not None:
                 if user.password is not None:
                     # Password will be none in event the user already exists. We can't help that.
-                    fg_print.error(f"Unable to import avatar for user {user.username} as this is only possible for newly created users")
+                    fg_print.error(f"Unable to import avatar for user {user.username}"
+                                   f" as this is only possible for newly created users")
                     continue
 
                 try:
@@ -325,10 +366,11 @@ class Migrator:
             # import public keys if possible
             self._import_user_keys(user=user)
 
-            # Now print all the newly created users details (so they can be copied and pasted as needed into a spreadsheet perhaps)
+            # Now print all the newly created users details (so they can be
+            #  copied and pasted as needed into a spreadsheet perhaps)
             self._list_user_details(users=users)
 
-        
+
 
     def _list_user_details(self, users:list[CanonicalSystemUser]):
         username_w = max(len("Username"), *(len(u.username) for u in users))
@@ -352,12 +394,12 @@ class Migrator:
                 f"{user.email:<{email_w}}  "
                 f"{user.full_name}"
             )
-        
 
-    
+
+
     def _image_url_to_base64(self, url) -> str|None:
         try:
-            response = requests.get(url)
+            response = requests.get(url, timeout=10)
             response.raise_for_status()
 
             return base64.b64encode(response.content).decode("utf-8")
@@ -365,11 +407,11 @@ class Migrator:
         except requests.RequestException:
             return None
 
-    
+
 
     def _image_url_to_data_url(self, url) -> str|None:
         try:
-            response = requests.get(url)
+            response = requests.get(url, timeout=10)
             response.raise_for_status()
 
             content_type = response.headers.get("Content-Type", "image/jpeg")
@@ -385,57 +427,61 @@ class Migrator:
         """import all organizations and their members"""
         # read all users
         canonical_organizations: CanonicalOrganizations = self.migration_source.list_organizations()
-        
-        fg_print.info(f"Found {len(canonical_organizations.members)} {self.migration_source.getSourceSystemName()} {canonical_organizations.source_type}")
+
+        fg_print.info(f"Found {len(canonical_organizations.members)} "
+                      f"{self.migration_source.getSourceSystemName()}"
+                      f" {canonical_organizations.source_type}")
 
         group_names = [org.username for org in canonical_organizations.members]
         fg_print.info(f"Importing groups... {group_names}")
 
-        # try:
-            # We will need to repetatively check this list so I don't see it is a good idea to use iterator.
-            # Note: we could instead use get_org and get just what we need, but we can only pass in a name - is this username or name?
-            # existing_forgejo_organizations = list(self.migration_dest.iter_forgejo_organizations())
-        # except IterativeFetchError:
-        #     # lets skip import of orgs.
-        #     return
-        
+
         for organization in canonical_organizations.members:
             # create the Forgejo organization
-            fg_print.info(f"Importing {organization.source_type} {organization.username} as Forgejo organization {organization.get_safe_username()}...")
-            
-            #existing_forgejo_org = next((org for org in existing_forgejo_organizations if org.username.lower() == organization.get_safe_username().lower()), None)
-            
-            # This individual retrieval replaces a search through the list. I'm not sure if it'll use more time and be less reliable (more api calls)...
+            fg_print.info(f"Importing {organization.source_type} {organization.username}"
+                          f" as Forgejo organization {organization.get_safe_username()}...")
+
+            # This individual retrieval replaces a search through the list. I'm not sure
+            # if it'll use more time and be less reliable (more api calls)...
             existing_forgejo_org = self.migration_dest.get_forgejo_organization(org = organization)
-            
-            # fg_print.debug(f"Existing Forgejo organizations: {[org.username for org in existing_forgejo_organizations]}")
+
+            # fg_print.debug(f"Existing Forgejo organizations: "
+            #                f"{[org.username for org in existing_forgejo_organizations]}")
             fg_print.debug(f"Matched = {existing_forgejo_org is not None}")
             # Add the forgejo organization
-            added_org = self.migration_dest.forgejo_add_organization(organization=organization, existing_forgejo_org=existing_forgejo_org)
+            added_org = self.migration_dest.forgejo_add_organization(
+                                                organization=organization,
+                                                existing_forgejo_org=existing_forgejo_org)
             if not added_org:
-                fg_print.error(f"Skipping adding teams for Organization {organization.get_safe_username()} that does not exist!",
-                               f"Skipping adding teams for Organization {organization.get_safe_username()} that does not exist!")
+                fg_print.error("Skipping adding teams for Organization "
+                               f"{organization.get_safe_username()} that does not exist!",
+                               "Skipping adding teams for Organization "
+                               f"{organization.get_safe_username()} that does not exist!")
                 continue # org does not exist
 
             # Finally, import those group members
-            self.access_mapping_strategy.import_teams(migration_source=self.migration_source, organization=organization)
+            self.access_mapping_strategy.import_teams(migration_source=self.migration_source,
+                                                      organization=organization)
 
 
 
     def import_repos(self, import_repo_content:bool=True):
-        """read all projects and their issues if import_repo_content is True. Always applies Collabroration rights"""
-        
+        """read all projects and their issues if import_repo_content is True.
+           Always applies Collabroration rights"""
+
         source_repos : list[CanonicalRepo] = self.migration_source.list_repositories()
 
         source_repo : CanonicalRepo
         for source_repo in source_repos:
-            
+
             if import_repo_content:
                 if source_repo.is_individual:
-                    fg_print.info(f"Importing personal {source_repo.source_type} {source_repo.name} from owner {source_repo.owner_name}")
+                    fg_print.info(f"Importing personal {source_repo.source_type}"
+                                  f" {source_repo.name} from owner {source_repo.owner_name}")
                 else:
-                    fg_print.info(f"Importing {source_repo.source_type} {source_repo.name} from owner {source_repo.owner_name}")
-                
+                    fg_print.info(f"Importing {source_repo.source_type} {source_repo.name}"
+                                  f" from owner {source_repo.owner_name}")
+
                 # import project repo
                 self._run_inbuilt_repo_import(source_repo=source_repo)
 
@@ -447,7 +493,8 @@ class Migrator:
 
                 # Handled by inbuilt repo migration
                 # import milestones
-                #milestones: list[gitlab.v4.objects.ProjectMilestone] = project.milestones.list(all=True)
+                #milestones: list[gitlab.v4.objects.ProjectMilestone] = project.milestones.list(
+                #                                                           all=True)
                 #fg_print.info(f"Found {len(milestones)} milestones for project {project.name}")
                 #_import_project_milestones(fg_api, milestones, project_owner_name, project.name)
 
@@ -457,7 +504,10 @@ class Migrator:
                 #fg_print.info(f"Found {len(issues)} issues for project {project.name}")
                 #_import_project_issues(fg_api, issues, project_owner_name, project.name)
             else:
-                #fg_print.info(f"Skipping import of {source_repo.source_type} {source_repo.name} from owner {source_repo.owner_name} *Contents*")
+                #fg_print.info(f"Skipping import of {source_repo.source_type} {source_repo.name}"
+                #              f" from owner {source_repo.owner_name} *Contents*")
                 pass
             # Always configure the accessors.
-            self.access_mapping_strategy.import_repository_accessors(migration_source=self.migration_source, source_repo=source_repo)
+            self.access_mapping_strategy.import_repository_accessors(
+                                                migration_source=self.migration_source,
+                                                source_repo=source_repo)

@@ -1,3 +1,4 @@
+"""Defines the AccessLevelAccessMappingStrategy class"""
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import override
@@ -7,8 +8,12 @@ from pyforgejo import Team
 from fg_migration.core.config_types import MigrationConfig
 from fg_migration.utils import fg_print
 from fg_migration.strategies.access_mapping_strategy import AccessMappingStrategy
-from fg_migration.core.canonical_types import CanonicalGroupMembership, CanonicalOrganization, CanonicalRepo, CanonicalRepoMemberships, CanonicalUser
-from fg_migration.adapters.forgeo_types import ForgejoRepositoryRole, ForgejoRolePermissionDefinition, ForgejoTeamDefinition, IterativeFetchError
+from fg_migration.core.canonical_types import (CanonicalGroupMembership, CanonicalOrganization,
+                                               CanonicalRepo, CanonicalRepoMemberships,
+                                               CanonicalUser)
+from fg_migration.adapters.forgeo_types import (ForgejoRepositoryRole,
+                                                ForgejoRolePermissionDefinition,
+                                                ForgejoTeamDefinition, IterativeFetchError)
 from fg_migration.adapters.forgjo import ForgejoDestination
 from fg_migration.core.migration_source_type import MigrationSource
 from fg_migration.utils.utils import name_clean
@@ -42,9 +47,13 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
     def __init__(self, migration_dest:ForgejoDestination, migration_config:MigrationConfig):
         self.migration_dest = migration_dest
         self.migration_config = migration_config
-    
+
     @dataclass
     class TeamMatchResult:
+        """Complex type for use when searching for a team to add users to. If a team is
+           found but it needs moving out of the way because it has pre-existing different
+           set of users to those being imported, renamed team is set and remove key is set
+           otherwise matched team is set (i.e. either or)"""
         matched_team: Team | None = None
         renamed_team: Team | None = None
         remove_key: str | None = None
@@ -147,7 +156,8 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
                 if not existing_team.name:
                     fg_print.error(
                         f"Created team returned without a name. Team Id = {existing_team.id}"
-                        f"for organization {organization.get_safe_username()}. Skipping import of team users."
+                        f"for organization {organization.get_safe_username()}."
+                        " Skipping import of team users."
                     )
                     continue
                 existing_forgejo_org_teams_map[existing_team.name.lower()] = existing_team
@@ -164,6 +174,7 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
             )
 
 
+    @override
     def import_team_users_from_usernames(
             self,
             organization: CanonicalOrganization,
@@ -195,11 +206,13 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
 
         if source_repo.is_individual:
             fg_print.info(
-                f"\nImporting collaborators for personal {source_repo.source_type} {source_repo.name}..."
+                f"\nImporting collaborators for personal {source_repo.source_type}"
+                f" {source_repo.name}..."
             )
         else:
             fg_print.info(
-                f"\nImporting collaborators for shared {source_repo.source_type} {source_repo.name}..."
+                f"\nImporting collaborators for shared {source_repo.source_type}"
+                f" {source_repo.name}..."
             )
 
         if len(repo_accessors.members) == 0:
@@ -216,7 +229,7 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
         # ---------------------------------------------------
         # Resolve repo owner
         # ---------------------------------------------------
-        forgejo_repo_owner = self.migration_dest._resolve_forgejo_repo_owner(source_repo)
+        forgejo_repo_owner = self.migration_dest.resolve_forgejo_repo_owner(source_repo)
         if forgejo_repo_owner is None or forgejo_repo_owner.username is None:
             fg_print.error(
                 f"Failed to resolve Forgejo owner for {source_repo.name}, skipping"
@@ -305,8 +318,10 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
                     ):
                         # Only add usernames if successfully added team.
                         affected_usernames = member_usernames.difference(all_team_usernames)
-                        fg_print.warning(f"Team addition with Users failed. These users will not be added as individual members instead. Affected users: {affected_usernames}")
-                    
+                        fg_print.warning("Team addition with Users failed. These users will"
+                                         " not be added as individual members instead. "
+                                         f"Affected users: {affected_usernames}")
+
                     # Mark users as accounted for by team intent.
                     # We deliberately do not fall back to individual collaborators
                     # because that would alter the intended permission model.
@@ -317,7 +332,7 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
                     f"{forgejo_repo_owner.username}"
                 )
                 return
-        
+
         # ---------------------------------------------------
         # STEP 3: individual collaborators (true fallback path)
         # ---------------------------------------------------
@@ -343,7 +358,7 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
                 )
                 continue
 
-            self.migration_dest._import_individual_user_collaborator(
+            self.migration_dest.import_individual_user_collaborator(
                 existing_collaborator_ids=existing_collaborator_ids,
                 accessor=membership,
                 source_repo=source_repo,
@@ -380,45 +395,55 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
             return "read"
 
         return None
-    
 
-    def _get_forgejo_team_definition(self, migration_source:MigrationSource, source_access_level:str, fuzzy:bool) -> ForgejoTeamDefinition | None:
-        """Retrieves a ForgejoTeamDefinition, creating a new one and adding neccessary data to the maps as required"""
+
+    def _get_forgejo_team_definition(self,
+                                     migration_source:MigrationSource,
+                                     source_access_level:str,
+                                     fuzzy:bool) -> ForgejoTeamDefinition | None:
+        """Retrieves a ForgejoTeamDefinition, creating a new one and adding neccessary data to
+           the maps as required"""
         # get forgejo team definition matching gitlab permission level
-        repository_role : ForgejoRepositoryRole = migration_source.get_repository_role(source_access_level=source_access_level)
-        
+        repository_role : ForgejoRepositoryRole = migration_source.get_repository_role(
+                                                    source_access_level=source_access_level)
+
         if repository_role.is_custom:
             nearest_repository_role = None
             if fuzzy:
-                fg_print.warning(f"{migration_source.getSourceSystemName()} Role:Forgejo Team Mapping missing for {repository_role}. Using fuzzy matching")
-                nearest_repository_role = migration_source.get_nearest_repository_role(source_access_level=source_access_level,
-                                                                                allow_downgrade=self.migration_config.ALLOW_FUZZY_AUTH_DOWNGRADE,
-                                                                                allow_upgrade=self.migration_config.ALLOW_FUZZY_AUTH_UPGRADE)
+                fg_print.warning(f"{migration_source.getSourceSystemName()} Role:"
+                                 f"Forgejo Team Mapping missing for {repository_role}."
+                                  " Using fuzzy matching")
+                nearest_repository_role = migration_source.get_nearest_repository_role(
+                                source_access_level=source_access_level,
+                                allow_downgrade=self.migration_config.ALLOW_FUZZY_AUTH_DOWNGRADE,
+                                allow_upgrade=self.migration_config.ALLOW_FUZZY_AUTH_UPGRADE)
             # if it still isn't valid.
             if nearest_repository_role is None:
                 return None
-            # we now have a valid nearest_repository_role, lets create a mapping based on the team referenced by that for our invalid one.
-            self.migration_dest.addTeamMapping(map_from_role=repository_role, to_role=nearest_repository_role)
+            # we now have a valid nearest_repository_role, lets create a mapping based
+            # on the team referenced by that for our invalid one.
+            self.migration_dest.add_team_mapping(map_from_role=repository_role,
+                                                 to_role=nearest_repository_role)
 
         # now we definitely have a team mapped against this role, even if it is just a basic string
         return self.migration_dest.team_definitions[repository_role]
-    
+
 
 
     def _find_existing_org_team_for_new_users_matching(self,
-                                                   organization : CanonicalOrganization,
-                                                   existing_forgejo_teams_map : dict[str,Team], 
-                                                   forgejo_team_definition : ForgejoTeamDefinition, 
-                                                   canonical_team_members : list[CanonicalUser]) -> TeamMatchResult | None:
-        
+                            organization : CanonicalOrganization,
+                            existing_forgejo_teams_map : dict[str,Team],
+                            forgejo_team_definition : ForgejoTeamDefinition,
+                            canonical_team_members : list[CanonicalUser]) -> TeamMatchResult | None:
+
         matched_team = self._find_matching_team(existing_forgejo_teams_map, forgejo_team_definition)
         if matched_team is None:
             return self.TeamMatchResult(matched_team=None)
-        
+
         try:
             existing_usernames = {member.login
-                                  for member in self.migration_dest.iter_forgejo_team_members(matched_team)
-                                  if member.login is not None}
+                        for member in self.migration_dest.iter_forgejo_team_members(matched_team)
+                        if member.login is not None}
         except IterativeFetchError:
             # bubble the problem
             return None
@@ -428,26 +453,30 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
                                for user in canonical_team_members}
 
         if existing_usernames == imported_usernames:
-            fg_print.info(f"Pre-existing team members exactly match team being imported, so reusing."
-                          f"\nAffected Forgejo Organization {organization.get_safe_username()} Team {matched_team.name}")
+            fg_print.info(f"Pre-existing team members exactly match team being imported,"
+                          " so reusing.\n"
+                          f"Affected Forgejo Organization {organization.get_safe_username()}"
+                          f" Team {matched_team.name}")
             return self.TeamMatchResult(matched_team=matched_team)
-        
+
         if self.migration_config.USE_EXISTING_TEAMS:
-            fg_print.warning(f"Pre-existing team users will be granted access to new repositories that are created with access granted to this team."
-                             f"\nAffected Forgejo Organization {organization.get_safe_username()} Team {matched_team.name}, usernames: {existing_usernames}")
+            fg_print.warning("Pre-existing team users will be granted access to new repositories"
+                             " that are created with access granted to this team.\n"
+                             f"Affected Forgejo Organization {organization.get_safe_username()}"
+                             f" Team {matched_team.name}, usernames: {existing_usernames}")
             return self.TeamMatchResult(matched_team=matched_team)
-        
+
         result = self._rename_team_out_of_the_way(team = matched_team)
 
 
         return result
-    
+
 
     def _rename_team_out_of_the_way(self,
                                     team: Team,
                                     ) -> TeamMatchResult:
-        
-        current_definition = ForgejoTeamDefinition.fromTeam(
+
+        current_definition = ForgejoTeamDefinition.from_team(
             team=team,
             role_builder=self.migration_dest.forgejo_team_to_role_mapper,
             require_exact=True,
@@ -465,49 +494,63 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
         )
 
         if updated_team is not None:
-            fg_print.debug(f"Success: Moved team with name {team.name} out of the way to allow creation of new team with the same name for import. Renamed team to {updated_team.name}")
+            fg_print.debug(f"Success: Moved team with name {team.name} out of the way to allow "
+                           "creation of new team with the same name for import. Renamed team "
+                           f"to {updated_team.name}")
         else:
-            fg_print.debug(f"Failed: Moved team with name {team.name} out of the way to allow creation of new team with the same name for import.")
+            fg_print.debug(f"Failed: Moved team with name {team.name} out of the way to allow "
+                           "creation of new team with the same name for import.")
 
         if updated_team is not None:
             return self.TeamMatchResult(renamed_team=updated_team, remove_key=team.name.lower())
-        
+
         return self.TeamMatchResult(matched_team=team)
 
-    
 
-    def _get_forgejo_role_definition(self, migration_source:MigrationSource, source_access_level:str, fuzzy:bool) -> ForgejoRolePermissionDefinition | None:
-        """Retrieves a ForgejoRoleDefinition, creating a new one and adding neccessary data to the maps as required"""
+
+    def _get_forgejo_role_definition(self, migration_source:MigrationSource,
+                                     source_access_level:str,
+                                     fuzzy:bool) -> ForgejoRolePermissionDefinition | None:
+        """Retrieves a ForgejoRoleDefinition, creating a new one and adding neccessary data to the
+           maps as required"""
         # get forgejo team definition matching gitlab permission level
-        repository_role : ForgejoRepositoryRole = migration_source.get_repository_role(source_access_level=source_access_level)
-        
+        repository_role : ForgejoRepositoryRole = migration_source.get_repository_role(
+                                                        source_access_level=source_access_level)
+
         if repository_role.is_custom:
             nearest_repository_role = None
             if fuzzy:
-                fg_print.warning(f"{migration_source.getSourceSystemName()} Role:Forgejo Team Mapping missing for {repository_role}. Using fuzzy matching")
-                nearest_repository_role = migration_source.get_nearest_repository_role(source_access_level=source_access_level,
-                                                                                allow_downgrade=self.migration_config.ALLOW_FUZZY_AUTH_DOWNGRADE,
-                                                                                allow_upgrade=self.migration_config.ALLOW_FUZZY_AUTH_UPGRADE)
+                fg_print.warning(f"{migration_source.getSourceSystemName()} Role:Forgejo Team"
+                                 f" Mapping missing for {repository_role}. Using fuzzy matching")
+
+                nearest_repository_role = migration_source.get_nearest_repository_role(
+                                source_access_level=source_access_level,
+                                allow_downgrade=self.migration_config.ALLOW_FUZZY_AUTH_DOWNGRADE,
+                                allow_upgrade=self.migration_config.ALLOW_FUZZY_AUTH_UPGRADE)
+
             # if it still isn't valid.
             if nearest_repository_role is None:
                 return None
-            # we now have a valid nearest_repository_role, lets create a mapping based on the team referenced by that for our invalid one.
-            self.migration_dest.addRoleMapping(map_from_role=repository_role, to_existing_role=nearest_repository_role)
+            # we now have a valid nearest_repository_role, lets create a mapping based on
+            # the team referenced by that for our invalid one.
+            self.migration_dest.add_role_mapping(map_from_role=repository_role,
+                                                 to_existing_role=nearest_repository_role)
 
         # now we definitely have a team mapped against this role, even if it is just a basic string
         return self.migration_dest.role_definitions[repository_role]
-    
+
 
 
     def _find_matching_team(self,
                             existing_forgejo_teams_map: dict[str, Team],
                             forgejo_team_definition: ForgejoTeamDefinition,
     ) -> Team | None:
-        
+
         team_key = forgejo_team_definition.name.lower()
         found = existing_forgejo_teams_map.get(
             team_key
         )
         if found is None:
-            fg_print.debug(f"No existing team matching {team_key} found in set !{list(existing_forgejo_teams_map.keys())}")
+            fg_print.debug(f"No existing team matching {team_key}"
+                           f" found in set !{list(existing_forgejo_teams_map.keys())}")
         return found

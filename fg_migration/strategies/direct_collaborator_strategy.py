@@ -1,4 +1,10 @@
+"""contains the DirectCollaboratorOnlyStrategy class"""
+from typing import override
+
 from pyforgejo import Team
+
+from fg_migration.adapters.forgjo import ForgejoDestination
+from fg_migration.core.config_types import MigrationConfig
 from fg_migration.strategies.access_mapping_strategy import AccessMappingStrategy
 from fg_migration.core.canonical_types import (
     CanonicalOrganization,
@@ -21,12 +27,17 @@ class DirectCollaboratorOnlyStrategy(AccessMappingStrategy):
     - All non-owner access is handled via direct repository collaborators
     """
 
-    def __init__(self, migration_dest):
+    migration_dest:ForgejoDestination
+    migration_config:MigrationConfig
+
+    def __init__(self, migration_dest:ForgejoDestination, migration_config:MigrationConfig):
         self.migration_dest = migration_dest
+        self.migration_config = migration_config
 
     # ---------------------------------------------------------
     # Teams: explicitly disabled except for required owner team
     # ---------------------------------------------------------
+    @override
     def import_teams(self, migration_source: MigrationSource, organization: CanonicalOrganization):
         fg_print.info(
             f"Skipping access-level team import for {organization.get_safe_username()} "
@@ -34,12 +45,21 @@ class DirectCollaboratorOnlyStrategy(AccessMappingStrategy):
         )
         return
 
-    def import_team_users_from_usernames(self, *args, **kwargs):
+    @override
+    def import_team_users_from_usernames(
+        self,
+        organization: CanonicalOrganization,
+        usernames: set[str],
+        dest_team: Team,
+        team_members_cache: dict[int, set[str]],
+        is_new_team: bool,
+    ):
         return
 
     # ---------------------------------------------------------
     # Repository access: direct users only
     # ---------------------------------------------------------
+    @override
     def import_repository_accessors(
         self,
         migration_source: MigrationSource,
@@ -55,7 +75,7 @@ class DirectCollaboratorOnlyStrategy(AccessMappingStrategy):
 
         fg_print.info(f"Importing direct collaborators for {source_repo.name}")
 
-        forgejo_repo_owner = self.migration_dest._resolve_forgejo_repo_owner(source_repo)
+        forgejo_repo_owner = self.migration_dest.resolve_forgejo_repo_owner(source_repo)
         if not forgejo_repo_owner or not forgejo_repo_owner.username:
             fg_print.error(f"Cannot resolve owner for {source_repo.name}")
             return
@@ -90,7 +110,7 @@ class DirectCollaboratorOnlyStrategy(AccessMappingStrategy):
                 )
                 continue
 
-            self._import_individual_user_collaborator(
+            self.migration_dest.import_individual_user_collaborator(
                 existing_collaborator_ids=existing_collaborator_ids,
                 accessor=membership,
                 source_repo=source_repo,
@@ -100,6 +120,7 @@ class DirectCollaboratorOnlyStrategy(AccessMappingStrategy):
     # ---------------------------------------------------------
     # Permission mapping
     # ---------------------------------------------------------
+    @override
     def resolve_forgejo_permission(
         self,
         migration_source: MigrationSource,

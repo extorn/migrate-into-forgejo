@@ -1,3 +1,4 @@
+"""A series of classes involved in the interaction with the PyForgejo API"""
 
 from abc import abstractmethod
 from dataclasses import dataclass, field
@@ -16,10 +17,11 @@ from fg_migration.utils.utils import diff_dataclasses
 from httpx import Client as HttpxClient
 
 class ForgejoApiBuilder:
+    """A builder for the PyForgejoApi, configuring authentication etc in a central way"""
     config : ForgejoConfig
 
     def __init__(self, forgejo_config:ForgejoConfig):
-            self.config = forgejo_config
+        self.config = forgejo_config
 
     def build_forgejo_api_client(self, api_key: str | None = None) -> pyforgejo.PyforgejoApi:
         """Build a Forgejo API Client using either the API key provided, or the default API key"""
@@ -28,13 +30,18 @@ class ForgejoApiBuilder:
             api_token = self.config.FORGEJO_API_TOKEN
         else:
             api_token = api_key
-        return PyforgejoApi(base_url=self.config.FORGEJO_API_URL, 
-                            api_key=api_token, 
+        return PyforgejoApi(base_url=self.config.FORGEJO_API_URL,
+                            api_key=api_token,
                             httpx_client = self._build_httpx_client())
-    
-    def _build_httpx_client(self, timeout: float = 60, follow_redirects: bool = True) -> HttpxClient:
+
+    def _build_httpx_client(self, timeout: float = 60,
+                            follow_redirects: bool = True) -> HttpxClient:
+        """Build a custom instance of the HttpxClient, adding support for
+           client certificate authentication"""
+
         client = None
-        if(self.config.FORGEJO_CLIENT_AUTH_CERT != None and self.config.FORGEJO_CLIENT_AUTH_KEY != None):
+        if(self.config.FORGEJO_CLIENT_AUTH_CERT is not None
+           and self.config.FORGEJO_CLIENT_AUTH_KEY is not None):
             cert_path = self.config.FORGEJO_CLIENT_AUTH_CERT
             key_path = self.config.FORGEJO_CLIENT_AUTH_KEY
             cert = (cert_path, key_path)
@@ -42,13 +49,14 @@ class ForgejoApiBuilder:
         return client
 
     def test_forgejo_connection(self, fg_api:PyforgejoApi) -> bool:
+        """Run an API call to ensure the connection was successful"""
         try:
             response = fg_api.miscellaneous.get_version()
         except Exception as e:
             fg_print.error(f"Failed to connect to Forgejo! {e}")
             return False
         fg_ver = response.version
-        
+
         fg_print.info(f"Connected to Forgejo, version: {fg_ver}")
         return True
 
@@ -56,26 +64,35 @@ class ForgejoApiBuilder:
 
 @dataclass(frozen=True)
 class ForgejoRepositoryRole():
+    """A type to pass around a finite set of Roles used for access to repositories
+       If the role has been auto created using fuzzy matching to an existing role
+       the is_custom will be true"""
     id: str
     is_custom: bool = False
 
 
 @dataclass
 class ForgejoRolePermissionDefinition:
+    """Maps a Forgejo role to a set of permissions on the Forgejo server"""
     role : ForgejoRepositoryRole
     can_create_org_repo:bool = False
     includes_all_repositories:bool = False
     permission:CreateTeamOptionPermission = ""
-    units_map: dict[str,str] = field(default_factory=dict) # use of field here ensures new instance for every instance of the class
+    # use of field here ensures new instance for every instance of the class
+    units_map: dict[str,str] = field(default_factory=dict)
 
     def diff(self, other:ForgejoRolePermissionDefinition) -> str :
+        """Provide an equality check against an-other role permission. Just
+           the differences are shown which makes it easier to see what has changed"""
         return diff_dataclasses(self,other)
 
 @dataclass
 class ForgejoTeamDefinition:
-    """A definition for a Forgejo team, which may be used to create new teams or compare with existing ones.
+    """A definition for a Forgejo team, which may be used to create new teams or compare
+       with existing ones.
        Note that a team name is its ID, but it is only unique in a given organization.
-       Technically two identically named teams could exist in separate organizations with different permissions
+       Technically two identically named teams could exist in separate organizations with
+       different permissions
        This is not currently handled in the code, but it is something to be aware of."""
     name: str
     description: str
@@ -83,57 +100,70 @@ class ForgejoTeamDefinition:
     allow_empty: bool
 
     @staticmethod
-    def fromTeam(team:Team, role_builder:ForgejoTeamRoleBuilder, require_exact:bool=False) -> ForgejoTeamDefinition:
-        """Will find a team definition closest matching the team provided according to the rules in role_builder.
+    def from_team(team:Team, role_builder:ForgejoTeamRoleBuilder,
+                 require_exact:bool=False) -> ForgejoTeamDefinition:
+        """Will find a team definition closest matching the team provided according
+           to the rules in role_builder.
            If require_exact is true, then if none are found, one will be created"""
-        
+
         if role_builder:
-            role,_ = role_builder.get_role_matching_permission(team=team, require_exact=require_exact)
-            
+            role,_ = role_builder.get_role_matching_permission(team=team,
+                                                               require_exact=require_exact)
+
+
             role_permissions = role_builder.get_role_permissions(role)
             # we don't cache these because teams are only unique in a given organization.
-            return ForgejoTeamDefinition(name=team.name, description=team.description, permissions=role_permissions)
+            return ForgejoTeamDefinition(name=team.name,
+                                         description=team.description,
+                                         permissions=role_permissions)
 
         raise Exception("Role builder not available")
-    
+
     def diff(self, other:ForgejoTeamDefinition) -> str :
+        """Provide an equality check against an-other role permission. Just
+           the differences are shown which makes it easier to see what has changed"""
         return diff_dataclasses(self,other)
 
 class ForgejoTeamRoleBuilder:
+    """Interface for a ForgejoTeamRole provider"""
     @abstractmethod
-    def get_role_matching_permission(self, team:Team, require_exact:bool=False) -> tuple[ForgejoRepositoryRole,bool]:
+    def get_role_matching_permission(self, team:Team,
+                                     require_exact:bool=False) -> tuple[ForgejoRepositoryRole,bool]:
         """Retrieve the Forgejo role permissions applicable for this role
            Note; this is used only when retrieving existing teams from the Forgejo server at present
            @return tuple[role:ForgejoRepositoryRole,is_exact_match:bool]
         """
-        pass
+
     @abstractmethod
     def get_role_permissions(self, role:ForgejoRepositoryRole) -> ForgejoRolePermissionDefinition:
         """Retrieve the Forgejo role permissions applicable for this role
            Note; this is used only when retrieving existing teams from the Forgejo server at present
         """
-        pass
+
 
 class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
+    """An implementation of ForgejoTeamRoleBuilder that Provides Roles from a map of
+       available options. Custom roles can be generated and will then be available in
+       the cache for future requests"""
 
     role_definitions : dict[ForgejoRepositoryRole,ForgejoRolePermissionDefinition]
     custom_role_count: dict[ForgejoRepositoryRole, int] = {}
     CUSTOM_ROLE_PATTERN = re.compile(r"^Custom_(.+?)_(\d+)$")
 
-    def __init__(self, role_definitions:dict[ForgejoRepositoryRole,ForgejoRolePermissionDefinition]):
+    def __init__(self, role_definitions:dict[ForgejoRepositoryRole,
+                                            ForgejoRolePermissionDefinition]):
         self.role_definitions = role_definitions
-    
+
 
 
     @override
     def get_role_permissions(self, role:ForgejoRepositoryRole) -> ForgejoRolePermissionDefinition:
         return self.role_definitions[role]
-    
-    
-    
+
     @override
-    def get_role_matching_permission(self, team:Team, require_exact:bool=False) -> tuple[ForgejoRepositoryRole,bool]:
-        
+    def get_role_matching_permission(self, team:Team,
+                                     require_exact:bool=False) -> tuple[ForgejoRepositoryRole,bool]:
+
         best_role = None
         best_score = float("-inf")
         debug_log = []
@@ -183,11 +213,11 @@ class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
 
         role = best_role
         if require_exact:
-            role = self.add_custom_forgejo_role(team=team, closest_existing_role=best_role)
+            role = self._add_custom_forgejo_role(team=team, closest_existing_role=best_role)
             return role,True
         return role,False
-    
-    
+
+
 
     def _update_get_custom_role_count(self, role: ForgejoRepositoryRole | None) -> int:
 
@@ -199,7 +229,7 @@ class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
 
         return self.custom_role_count[key]
 
-    
+
 
     def _is_custom_role(self, role_id: str) -> bool:
         return bool(self.CUSTOM_ROLE_PATTERN.match(role_id))
@@ -217,8 +247,10 @@ class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
 
 
 
-    @override
-    def add_custom_forgejo_role(self, team: Team, closest_existing_role: ForgejoRepositoryRole | None,) -> ForgejoRepositoryRole:
+    def _add_custom_forgejo_role(self, team: Team,
+                                closest_existing_role: ForgejoRepositoryRole | None,
+                                ) -> ForgejoRepositoryRole:
+        """Based on the role provided, create and store a new role in the cache"""
 
         num = self._update_get_custom_role_count(role=closest_existing_role)
         base_name = ("Role"
@@ -239,19 +271,22 @@ class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
         )
 
         return role
-    
+
 class IterativeFetchError(Exception):
-    pass
+    """Raised when an the ApiPaginator fails to retrieve the next page of data for some reason"""
+
 
 T = TypeVar("T")
 
 class ApiPaginator:
+    """Wraps the PyforgejoApi with pagination support where errors are logged"""
     fg_api:PyforgejoApi
     max_page_size:int
     items_type:str
     retrieval_detail:str
 
-    def __init__(self, fg_api:PyforgejoApi, page_size:int=50, items_type:str="Items", retrieval_detail:str=""):
+    def __init__(self, fg_api:PyforgejoApi, page_size:int=50,
+                 items_type:str="Items", retrieval_detail:str=""):
         self.fg_api = fg_api
         self.max_page_size = page_size
         self.items_type = items_type
@@ -259,14 +294,16 @@ class ApiPaginator:
 
     def iterate(self, fetch_page_from_api: Callable[[PyforgejoApi, int, int], list[T]],
         ) -> Iterator[T]:
-        
+        """Create the API pagination wrapped in an Iterator"""
+
         page_idx = 1
         try:
             while True:
                 page_of_data : list
                 for attempt in range(3):
                     try:
-                        page_of_data = fetch_page_from_api(self.fg_api, page_idx, self.max_page_size)
+                        page_of_data = fetch_page_from_api(self.fg_api, page_idx,
+                                                           self.max_page_size)
                         break
                     except TimeoutError:
                         if attempt == 2:
@@ -279,7 +316,8 @@ class ApiPaginator:
                     break
         except Exception as e:
             detail = self._get_exception_detail(e)
-            msg = f"Failed to retrieve existing {self.items_type} page[{page_idx}]{self.retrieval_detail} {detail}"
+            msg = f"Failed to retrieve existing {self.items_type} page[{page_idx}]" \
+                  f"{self.retrieval_detail} {detail}"
             fg_print.error(msg)
             raise IterativeFetchError(msg) from e
 
@@ -289,15 +327,12 @@ class ApiPaginator:
         if isinstance(e, ApiError):
             body = getattr(e, "body", None)
             detail = body.get("message") if isinstance(body, dict) else str(body)
-            if("token does not have at least one of required scope" in detail):
+            if "token does not have at least one of required scope" in detail:
                 fg_print.error(f"Trapped Error {detail}")
-                fg_print.error(f"ERROR: Access Token used MUST have read+write permission on everything (permission:all) and be admin. Please create a new one and update the .migrate.ini file.")
+                fg_print.error("ERROR: Access Token used MUST have read+write permission "
+                               "on everything (permission:all) and be admin. Please "
+                               "create a new one and update the .migrate.ini file.")
                 os.sys.exit(1)
         else:
             detail = str(e)
         return detail
-
-
-
-
-

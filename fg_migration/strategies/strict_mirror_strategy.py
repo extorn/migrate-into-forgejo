@@ -1,7 +1,11 @@
+"""Contains an implementation of AccessMappingStrategy"""
+from typing import override
+
 from pyforgejo import Team
 
 from fg_migration.strategies.access_mapping_strategy import AccessMappingStrategy
-from fg_migration.core.canonical_types import CanonicalOrganization, CanonicalRepo, CanonicalRepoMemberships
+from fg_migration.core.canonical_types import (CanonicalOrganization, CanonicalRepo,
+                                               CanonicalRepoMemberships)
 from fg_migration.adapters.forgeo_types import IterativeFetchError
 from fg_migration.core.migration_source_type import MigrationSource
 from fg_migration.utils import fg_print
@@ -29,6 +33,7 @@ class StrictMirrorAccessMappingStrategy(AccessMappingStrategy):
     # ---------------------------------------------------------
     # TEAM IMPORT: strict group mirroring
     # ---------------------------------------------------------
+    @override
     def import_teams(self, migration_source: MigrationSource, organization: CanonicalOrganization):
         """
         Each canonical group becomes exactly one Forgejo team.
@@ -85,6 +90,7 @@ class StrictMirrorAccessMappingStrategy(AccessMappingStrategy):
     # ---------------------------------------------------------
     # TEAM MEMBERS: strict enforcement (no caching logic needed)
     # ---------------------------------------------------------
+    @override
     def import_team_users_from_usernames(
         self,
         organization: CanonicalOrganization,
@@ -122,6 +128,7 @@ class StrictMirrorAccessMappingStrategy(AccessMappingStrategy):
     # ---------------------------------------------------------
     # REPOSITORY ACCESS: team-only enforcement
     # ---------------------------------------------------------
+    @override
     def import_repository_accessors(
         self,
         migration_source: MigrationSource,
@@ -133,7 +140,7 @@ class StrictMirrorAccessMappingStrategy(AccessMappingStrategy):
 
         fg_print.info(f"Strict mirror repo import: {source_repo.name}")
 
-        forgejo_owner = self.migration_dest._resolve_forgejo_repo_owner(source_repo)
+        forgejo_owner = self.migration_dest.resolve_forgejo_repo_owner(source_repo)
         if not forgejo_owner or not forgejo_owner.username:
             fg_print.error(f"Cannot resolve repo owner for {source_repo.name}")
             return
@@ -215,6 +222,7 @@ class StrictMirrorAccessMappingStrategy(AccessMappingStrategy):
     # ---------------------------------------------------------
     # PERMISSIONS: must be exact, no collapsing logic
     # ---------------------------------------------------------
+    @override
     def resolve_forgejo_permission(
         self,
         migration_source: MigrationSource,

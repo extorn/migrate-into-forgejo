@@ -1,4 +1,4 @@
-
+"""This is a Series of classes directly involved in the updating of Forgejo as a destination"""
 from copy import deepcopy
 import os
 import random
@@ -9,24 +9,32 @@ from typing_extensions import deprecated
 
 import dateutil.parser
 
-import pyforgejo  # pip install pyforgejo (https://github.com/h44z/pyforgejo)
+from pyforgejo import PyforgejoApi # pip install pyforgejo (https://github.com/h44z/pyforgejo)
 
 # Forgejo API imports:
-from pyforgejo import ConflictError, CreateTeamOptionPermission, GpgKey, Issue, Label, MigrateRepoOptionsService, Milestone, NotFoundError, Organization, PublicKey, PyforgejoApi, Repository, Team, TeamPermission, User
+from pyforgejo import (ConflictError, CreateTeamOptionPermission, GpgKey, Issue, Label,
+                       MigrateRepoOptionsService, Milestone,
+                      NotFoundError, Organization, PublicKey, Repository, Team, User)
 from pyforgejo.core.api_error import ApiError
 import yaml
 
 from fg_migration.utils import fg_print
-from fg_migration.core.canonical_types import CanonicalOrganization, CanonicalRepo, CanonicalRepoMembership, CanonicalRepoOwner, CanonicalSystemUser
+from fg_migration.core.canonical_types import (CanonicalOrganization, CanonicalRepo,
+                                               CanonicalRepoMembership,
+                                               CanonicalRepoOwner, CanonicalSystemUser)
 from fg_migration.core.config_types import ForgejoConfig
-from fg_migration.adapters.forgeo_types import ApiPaginator, ForgejoRepositoryRole, ForgejoRolePermissionDefinition, ForgejoTeamDefinition, ForgejoTeamRoleBuilder, ForgejoTeamRoleMapper, IterativeFetchError
+from fg_migration.adapters.forgeo_types import (ApiPaginator, ForgejoRepositoryRole,
+                                                ForgejoRolePermissionDefinition,
+                                                ForgejoTeamDefinition, ForgejoTeamRoleBuilder,
+                                                ForgejoTeamRoleMapper, IterativeFetchError)
 
 
 class ForgejoDestination:
     """This is a wrapper around a destination for the migration"""
-    
+
     fg_api : PyforgejoApi
     forgejo_config : ForgejoConfig
+    #TODO maybe use the frozendict package here to make it clear these defaults don't change.
     default_role_definitions : dict[ForgejoRepositoryRole,ForgejoRolePermissionDefinition]
     default_team_definitions : dict[ForgejoRepositoryRole,ForgejoTeamDefinition]
     role_definitions : dict[ForgejoRepositoryRole,ForgejoRolePermissionDefinition]
@@ -36,19 +44,26 @@ class ForgejoDestination:
     def __init__(self, fg_api:PyforgejoApi, forgejo_config:ForgejoConfig):
         self.fg_api = fg_api
         self.forgejo_config = forgejo_config
-        self.default_role_definitions, self.default_team_definitions = self.load_roles(path=forgejo_config.USER_ROLES_FILE_PATH)
+        (self.default_role_definitions,
+        self.default_team_definitions) = self.load_roles(path=forgejo_config.USER_ROLES_FILE_PATH)
         self.role_definitions = deepcopy(self.default_role_definitions)
         self.team_definitions = deepcopy(self.default_team_definitions)
-        self.forgejo_team_to_role_mapper = ForgejoTeamRoleMapper(role_definitions=self.role_definitions)
-    
-    def get_default_team_definitions(self) -> list[ForgejoTeamDefinition]:
-        return self.default_team_definitions.values()
-    
+        self.forgejo_team_to_role_mapper = ForgejoTeamRoleMapper(
+                                                role_definitions=self.role_definitions)
 
-    
-    def load_roles(self, path: str) -> tuple[dict[ForgejoRepositoryRole,ForgejoRolePermissionDefinition],
-                                             dict[ForgejoRepositoryRole,ForgejoTeamDefinition]]:
-        with open(path) as f:
+    def get_default_team_definitions(self) -> list[ForgejoTeamDefinition]:
+        """retrieve a list of all default ForgejoTeamDefinition
+           (no custom definitions will be added here)"""
+        return self.default_team_definitions.values()
+
+
+
+    def load_roles(self, path: str) -> tuple[dict[ForgejoRepositoryRole,
+                                                  ForgejoRolePermissionDefinition],
+                                             dict[ForgejoRepositoryRole,
+                                                  ForgejoTeamDefinition]]:
+        """Load the User roles and mappings from config files"""
+        with open(path, encoding="UTF8") as f:
             cfg = yaml.safe_load(f)
 
         role_definitions = {}
@@ -57,7 +72,8 @@ class ForgejoDestination:
         for role_id, role_cfg in cfg["roles"].items():
             role = ForgejoRepositoryRole(role_id)
 
-            cfg_permission : CreateTeamOptionPermission = role_cfg.get("permission", "").strip() # Trim whitespace just in case
+            # Trim whitespace on cfg values just in case with strip()
+            cfg_permission : CreateTeamOptionPermission = role_cfg.get("permission", "").strip()
             permissions = ForgejoRolePermissionDefinition(
                 role=role,
                 can_create_org_repo=role_cfg.get("can_create_org_repo", False),
@@ -66,10 +82,13 @@ class ForgejoDestination:
                 units_map=role_cfg["units_map"],
             )
 
-            cfg_name : str = role_cfg.get("team_name", "").strip() # Trim whitespace just in case
-            cfg_desc : str = role_cfg.get("team_description", "").strip() # Trim whitespace just in case
-            cfg_allow_empty : bool = role_cfg.get("team_allow_empty", True) # Is this team permitted to be created when empty of users?
-            
+            cfg_name : str = role_cfg.get("team_name", "").strip()
+
+            cfg_desc : str = role_cfg.get("team_description", "").strip()
+
+            # Is this team permitted to be created when empty of users?
+            cfg_allow_empty : bool = role_cfg.get("team_allow_empty", True)
+
             team = ForgejoTeamDefinition(
                 name=cfg_name,
                 description=cfg_desc,
@@ -87,7 +106,8 @@ class ForgejoDestination:
     def iter_forgejo_labels(self, owner: str, repo: str) -> Iterator[Label]:
         """an iterator over all labels for a repository"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Labels",retrieval_detail=f" for project {repo}!")
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
+                                 items_type="Labels",retrieval_detail=f" for project {repo}!")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.issue.list_labels(
                 owner=owner,
@@ -97,12 +117,13 @@ class ForgejoDestination:
             )
         )
 
-    
+
 
     def iter_forgejo_milestones(self, owner: str, repo: str) -> Iterator[Milestone]:
         """get milestones for a repository"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Milestones",retrieval_detail=f" for project {repo}!")
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
+                                 items_type="Milestones",retrieval_detail=f" for project {repo}!")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.issue.get_milestones_list(
                 owner=owner,
@@ -117,7 +138,8 @@ class ForgejoDestination:
     def iter_forgejo_issues(self, owner: str, repo: str) -> Iterator[Issue]:
         """get issues for a repository"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Issues",retrieval_detail=f" for project {repo}!")
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
+                                 items_type="Issues",retrieval_detail=f" for project {repo}!")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.issue.list_issues(
                 owner=owner,
@@ -126,13 +148,14 @@ class ForgejoDestination:
                 limit=limit,
             )
         )
-       
+
 
 
     def iter_forgejo_teams(self, org_name: str) -> Iterator[Team]:
         """get teams for an organization"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Teams",retrieval_detail=f" for organization {org_name}!")
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Teams",
+                                 retrieval_detail=f" for organization {org_name}!")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.organization.org_list_teams(
                 org=org_name,
@@ -140,13 +163,15 @@ class ForgejoDestination:
                 limit=limit,
             )
         )
-        
 
-    #FIXME currently retrieve these 3 times in the migrator, 2x while importing teams (may be reducable to 1x with some thought)!!!!
+
+    #FIXME currently retrieve these 3 times in the migrator,
+    #      2x while importing teams (may be reducable to 1x with some thought)!!!!
     def iter_forgejo_team_members(self, team: Team) -> Iterator[User]:
         """get members for a team"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Team Members",retrieval_detail=f" for Team {team.name}!")
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Team Members",
+                                 retrieval_detail=f" for Team {team.name}!")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.organization.org_list_team_members(
                 id=team.id,
@@ -160,7 +185,8 @@ class ForgejoDestination:
     def iter_forgejo_collaborators(self, owner_username: str, repo: str) -> Iterator[User]:
         """get collaborators for a repository"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Collaborators",retrieval_detail=f" for repo {repo}!")
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
+                                 items_type="Collaborators",retrieval_detail=f" for repo {repo}!")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.repository.repo_list_collaborators(
                 owner=owner_username,
@@ -175,7 +201,8 @@ class ForgejoDestination:
     def iter_forgejo_user_keys(self, username : str) -> Iterator[PublicKey] :
         """get public keys for a user"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Public Keys",retrieval_detail=f" for user {username}!")
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
+                                 items_type="Public Keys",retrieval_detail=f" for user {username}!")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.user.list_keys(
                 username=username,
@@ -183,13 +210,14 @@ class ForgejoDestination:
                 limit=limit,
             )
         )
-    
+
 
 
     def iter_forgejo_user_gpg_keys(self, username : str) -> Iterator[GpgKey] :
         """get gpg keys for a user"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="GPG Keys",retrieval_detail=f" for user {username}!")
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
+                                 items_type="GPG Keys",retrieval_detail=f" for user {username}!")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.user.user_list_gpg_keys(
                 username=username,
@@ -197,7 +225,7 @@ class ForgejoDestination:
                 limit=limit,
             )
         )
-    
+
 
 
     def iter_forgejo_teams_in_repository(self,
@@ -205,7 +233,8 @@ class ForgejoDestination:
                                         repo_name:str) -> Iterator[Team]:
         """List all teams in a repository"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Teams",retrieval_detail=f" in Repository {repo_name}!")
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
+                                 items_type="Teams",retrieval_detail=f" in Repository {repo_name}!")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.repository.repo_list_teams(
                 owner=owner_username,
@@ -221,7 +250,8 @@ class ForgejoDestination:
     def iter_forgejo_organizations(self) -> Iterator[Organization]:
         """list all organizations in Forgejo"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Organizations",retrieval_detail=f" in Forgejo!")
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
+                                 items_type="Organizations", retrieval_detail=" in Forgejo!")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.organization.org_get_all(
                 page=page,
@@ -231,30 +261,39 @@ class ForgejoDestination:
 
 
 
-    def get_forgejo_organization(self, org: CanonicalOrganization, org_name: str) -> Organization|None:
-        
+    def get_forgejo_organization(self, org: CanonicalOrganization) -> Organization|None:
+        """Retrieve Forgejo organization with a given name"""
         try:
-            #fg_print.debug(f"Trying to load forgejo organization {possible_org} for gitlab project {project.name}...")
-            org = self.fg_api.organization.org_get(org_name)
-            fg_print.debug(f"Loaded organization {org.full_name} for {org.source_system} {org.source_type} {org.name}!")
+            #fg_print.debug(f"Trying to load forgejo organization {possible_org} "
+            #               f"for gitlab project {project.name}...")
+            org = self.fg_api.organization.org_get(org.get_safe_username())
+            fg_print.debug(f"Loaded organization {org.full_name} for {org.source_system}"
+                           f" {org.source_type} {org.name}!")
             return org
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to retrieve forgejo organization {org_name} for repo {org.get_safe_username()} using {org.source_system} {org.source_type} {org.name}! {detail}")
+            fg_print.error(f"Failed to retrieve forgejo organization {org.get_safe_username()}"
+                           f" for repo {org.get_safe_username()} using {org.source_system}"
+                           f" {org.source_type} {org.name}! {detail}")
         return None
-    
 
 
-    def get_forgejo_organization(self, repo: CanonicalRepo, org_name: str) -> Organization:
-        
+
+    def get_forgejo_organization_owner_of_repository(self, repo: CanonicalRepo) -> Organization:
+        """Retrieve organization owner of repository"""
+        org_name : str = repo.get_safe_owner_name()
         try:
-            #fg_print.debug(f"Trying to load forgejo organization {possible_org} for gitlab project {project.name}...")
+            #fg_print.debug(f"Trying to load forgejo organization {possible_org}"
+            #               f" for gitlab project {project.name}...")
             org = self.fg_api.organization.org_get(org_name)
-            fg_print.debug(f"Loaded organization {org.full_name} for {repo.source_system} {repo.source_type} {repo.name}!")
+            fg_print.debug(f"Loaded organization {org.full_name} for {repo.source_system}"
+                           f" {repo.source_type} {repo.name}!")
             return org
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to retrieve forgejo organization {org_name} for repo {repo.get_safe_username()} using {repo.source_system} {repo.source_type} {repo.name}! {detail}")
+            fg_print.error(f"Failed to retrieve forgejo organization {org_name} "
+                           f"for repo {repo.get_safe_username()} using {repo.source_system}"
+                           f" {repo.source_type} {repo.name}! {detail}")
         return None
 
 
@@ -276,7 +315,8 @@ class ForgejoDestination:
         """check if a user exists"""
         try:
             user = self.fg_api.user.get(username)
-            fg_print.warning(f"User {user.login}, (name '{user.full_name}') already exists in Forgejo, skipping!")
+            fg_print.warning(f"User {user.login}, (name '{user.full_name}') "
+                             "already exists in Forgejo, skipping!")
             return True
         except NotFoundError:
             return False
@@ -290,10 +330,14 @@ class ForgejoDestination:
     def forgejo_repo_exists(self, owner_username: str, repo: CanonicalRepo) -> bool:
         """check if a repository exists"""
         try:
-            fg_print.debug(f"Checking if Repository {repo.get_safe_username()} exists in Forgejo for owner {owner_username} to match {repo.source_system} {repo.source_type}...")
-            repository = self.fg_api.repository.repo_get(owner=owner_username, repo=repo.get_safe_username())
+            fg_print.debug(f"Checking if Repository {repo.get_safe_username()} exists in Forgejo"
+                           f" for owner {owner_username} to match {repo.source_system}"
+                           f" {repo.source_type}...")
+            repository = self.fg_api.repository.repo_get(owner=owner_username,
+                                                         repo=repo.get_safe_username())
             if repository is not None:
-                fg_print.warning(f"{repo.source_type} {repo.name} already exists in Forgejo, skipping!")
+                fg_print.warning(f"{repo.source_type} {repo.name}"
+                                  " already exists in Forgejo, skipping!")
                 return True
         except Exception as e:
             if isinstance(e, NotFoundError):
@@ -301,9 +345,10 @@ class ForgejoDestination:
                 return False
             else:
                 detail = self._get_exception_detail(e)
-                fg_print.error(f"Failed to check if {repo.source_type} {repo.name} exists in Forgejo for owner {owner_username}! {detail}")
+                fg_print.error(f"Failed to check if {repo.source_type} {repo.name} "
+                               f"exists in Forgejo for owner {owner_username}! {detail}")
 
-        
+
         fg_print.info(f"{repo.source_type} {repo.name} not found in Forgejo, importing!")
         return False
 
@@ -334,9 +379,10 @@ class ForgejoDestination:
 
 
     @deprecated("Not currently used")
-    def forgejo_issue_exists(self, existing_issues : list[Issue], repo: str, issue_title: str) -> bool:
+    def forgejo_issue_exists(self, existing_issues : list[Issue],
+                             repo: str, issue_title: str) -> bool:
         """check if an issue exists in a repository"""
-        
+
         if existing_issues:
             existing_issue = next(
                 (item for item in existing_issues if item.title == issue_title), None
@@ -357,11 +403,12 @@ class ForgejoDestination:
 
 
     @deprecated("Not currently used")
-    def find_forgejo_milestone_id_by_title(self, forgejo_milestones: list[Milestone], title: str) -> int:
+    def find_forgejo_milestone_id_by_title(self, forgejo_milestones: list[Milestone],
+                                           title: str) -> int:
         """get milestone id by title"""
         # get the forgejo milestone with matching title
         # the issue, if it exists, otherwise return None
-        
+
         forgejo_milestone : Milestone = next(
             (
                 item
@@ -377,16 +424,17 @@ class ForgejoDestination:
 
 
     @deprecated("Not currently used")
-    def find_forgejo_milestone_by_title(self, existing_milestones : list[Milestone], title: str) -> bool:
+    def find_forgejo_milestone_by_title(self, existing_milestones : list[Milestone],
+                                        title: str) -> Milestone|None:
         """check if a milestone exists in a repository"""
-        
+
         if existing_milestones:
             existing_milestone = next(
                 (item for item in existing_milestones if item.title == title), None
             )
 
             return existing_milestone
-        
+
         return None
 
 
@@ -394,14 +442,16 @@ class ForgejoDestination:
     def _forgejo_delete_collaborator(self, repo: CanonicalRepo, collaborator_username: str) -> bool:
         """delete a collaborator from a repository"""
         try:
-            self.fg_api.repository.repo_delete_collaborator(owner = repo.get_safe_owner_name(), 
-                                                            repo = repo.get_safe_username(), 
+            self.fg_api.repository.repo_delete_collaborator(owner = repo.get_safe_owner_name(),
+                                                            repo = repo.get_safe_username(),
                                                             collaborator = collaborator_username)
-            fg_print.debug(f"User {collaborator_username} removed as collaborator from repository {repo.get_safe_username()}")
+            fg_print.debug(f"User {collaborator_username} removed as collaborator"
+                           f" from repository {repo.get_safe_username()}")
         except Exception as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
-                    f"User {collaborator_username} removal as collaborator from repository {repo.get_safe_username()} failed: {detail}")
+                    f"User {collaborator_username} removal as collaborator from "
+                    f"repository {repo.get_safe_username()} failed: {detail}")
             return False
         return True
 
@@ -411,17 +461,20 @@ class ForgejoDestination:
                                         existing_collaborator_ids:set[int],
                                         user:User,
                                         repo:CanonicalRepo, permissions:CreateTeamOptionPermission):
-        """Add collaboration entry for repo. Will replace any existing one matching the name provided"""
+        """Add collaboration entry for repo. Will replace any existing one
+           matching the name provided"""
         # If there is an existing collaboration record, delete it.
         if user.id in existing_collaborator_ids:
 
-            fg_print.warning(f"Collaboration record for user {user.login} already exists in repository {repo.get_safe_username()}, replacing with new permissions...")
+            fg_print.warning(f"Collaboration record for user {user.login} already exists"
+                             f" in repository {repo.get_safe_username()},"
+                              " replacing with new permissions...")
             deleted = self._forgejo_delete_collaborator(repo=repo,
                                                     collaborator_username=user.login)
             if not deleted:
                 return False
         # Add new collaboration record for user
-        added = self._forgejo_add_collaboration(repo=repo, 
+        added = self._forgejo_add_collaboration(repo=repo,
                                                 collaborator_username=user.login,
                                                 permission=permissions)
         if not added:
@@ -430,38 +483,45 @@ class ForgejoDestination:
 
 
 
-    def _forgejo_add_collaboration(self, repo: CanonicalRepo, collaborator_username: str, permission: str) -> bool:
+    def _forgejo_add_collaboration(self, repo: CanonicalRepo, collaborator_username: str,
+                                   permission: str) -> bool:
         """add a collaborator to a repository"""
         try:
-            self.fg_api.repository.repo_add_collaborator(owner = repo.get_safe_owner_name(), 
-                                                        repo = repo.get_safe_username(), 
-                                                        collaborator = collaborator_username, 
+            self.fg_api.repository.repo_add_collaborator(owner = repo.get_safe_owner_name(),
+                                                        repo = repo.get_safe_username(),
+                                                        collaborator = collaborator_username,
                                                         permission = permission)
-            fg_print.debug(f"Collaboration on {repo.get_safe_username()} for user {collaborator_username} recorded!")
+            fg_print.debug(f"Collaboration on {repo.get_safe_username()} "
+                           f"for user {collaborator_username} recorded!")
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to add Collaboration for user {collaborator_username} on {repo.get_safe_username()}: {detail}",
-                           f"Failed to add Collaboration for user {collaborator_username} on {repo.get_safe_username()}")
+            fg_print.error(f"Failed to add Collaboration for user {collaborator_username}"
+                           f" on {repo.get_safe_username()}: {detail}")
             return False
-        # return true even if the collaborator already exists in the repository, because the existence of the collaborator in the repository is not a failure for the import of the project, we just skip it and continue with the import of the other collaborators
+        # return true even if the collaborator already exists in the repository,
+        # because the existence of the collaborator in the repository is not a failure
+        # for the import of the project, we just skip it and continue with the
+        # import of the other collaborators
         return True
 
 
 
     def forgejo_add_user(self, user:CanonicalSystemUser, notify: bool) -> bool:
         """add a user to Forgejo, return True if user created or already exists"""
-        
-        if not self.forgejo_user_exists(username=user.get_safe_username()): # need this because status 422 returned for conflict, not 409 
+
+        # need this because status 422 returned for conflict, not 409
+        if not self.forgejo_user_exists(username=user.get_safe_username()):
             rnd_str = "".join(random.choices(string.ascii_uppercase + string.digits, k=10))
             tmp_password = f"Tmp1!{rnd_str}"
             try:
+                # note temporary passsword, so vital they change as soon as they log in
                 self.fg_api.admin.create_user(
                     email=user.email,
                     full_name=user.full_name,
                     login_name=user.get_safe_username(),
                     password=tmp_password,
                     send_notify=notify,
-                    must_change_password=True, # this is a temporary one, so vital they change as soon as they log in
+                    must_change_password=True,
                     source_id=0,  # local user
                     username=user.get_safe_username(),
                 )
@@ -472,8 +532,10 @@ class ForgejoDestination:
                 return True # already exists
             except Exception as e:
                 detail = self._get_exception_detail(e)
-                fg_print.error(f"Failed to import {user.source_system} user {user.username} as {user.get_safe_username()}: {detail}",
-                                f"Failed to import {user.source_system} user {user.username} as {user.get_safe_username()}",
+                fg_print.error(f"Failed to import {user.source_system} user {user.username}"
+                               f" as {user.get_safe_username()}: {detail}",
+                               f"Failed to import {user.source_system} user {user.username}"
+                               f" as {user.get_safe_username()}",
                 )
                 return False
         return True
@@ -497,7 +559,8 @@ class ForgejoDestination:
             return False
 
 
-    def forgejo_add_user_key(self, username : str, key_name : str, key_content : str) -> PublicKey|None :
+    def forgejo_add_user_key(self, username : str, key_name : str,
+                             key_content : str) -> PublicKey|None :
         """Add a public key to the user"""
         try:
             # fg_print.info(f"Importing public key {key_name} for user {username}...")
@@ -523,7 +586,7 @@ class ForgejoDestination:
         headers : dict = { "Sudo" : username }
         request_options : RequestOptions = RequestOptions(additional_headers=headers)
         return request_options
-    
+
 
 
     def repo_migrate(
@@ -541,7 +604,7 @@ class ForgejoDestination:
         wiki: bool = True,
     ) -> Repository:
         """Migrate a repository from the source service to Forgejo"""
-        
+
         self.fg_api.repository.repo_migrate(
                                             auth_password=source_repo.auth_password,
                                             auth_username=source_repo.auth_username,
@@ -563,9 +626,10 @@ class ForgejoDestination:
 
 
 
-    def forgejo_add_gpg_key(self, username : str, key_id : str, armored_signature:str| None, armored_public_key : str) -> GpgKey|None :
+    def forgejo_add_gpg_key(self, username : str, key_id : str,
+                            armored_signature:str| None, armored_public_key : str) -> GpgKey|None :
         """Add a GPG key to the user"""
-        
+
         try:
             if armored_signature is None:
                 new_key = self.fg_api.user.user_current_post_gpg_key (
@@ -590,7 +654,8 @@ class ForgejoDestination:
 
 
 
-    @deprecated("WARNING: This cannot be used to create api tokens when the API was authorised using an access token")
+    @deprecated("WARNING: This cannot be used to create api tokens "
+                "when the API was authorised using an access token")
     def forgejo_delete_temp_api_token_for_user(self, username:str, token_name:str):
         """Delete an Access Token for the user (if using sudo)"""
         try:
@@ -603,29 +668,38 @@ class ForgejoDestination:
 
 
 
-    @deprecated("WARNING: This cannot be used to create api tokens when the API was authorised using an access token")
-    def forgejo_add_temp_api_token_for_user(self, username:str, token_name:str, desired_scopes:dict[str] = None) -> str:
+    @deprecated("WARNING: This cannot be used to create api tokens" \
+                " when the API was authorised using an access token")
+    def forgejo_add_temp_api_token_for_user(self, username:str, token_name:str,
+                                            desired_scopes:dict[str] = None) -> str:
         """Create an Access Token for the user (if using sudo)"""
         #Example desired_scopes=["read:user","write:user"]
         # A full list is here: https://forgejo.org/docs/latest/user/token-scope/
         try:
-            fg_print.info(f"Creating access token for user {username} {token_name} with scope {desired_scopes}")
-            user_api_token = self.fg_api.user.create_token(username=username, name=token_name, scopes=desired_scopes)
+            fg_print.info(f"Creating access token for user {username} {token_name}"
+                          f" with scope {desired_scopes}")
+            user_api_token = self.fg_api.user.create_token(username=username,
+                                                           name=token_name, scopes=desired_scopes)
         except Exception as e:
-            fg_print.warning(f"Creating access token for user {username} {token_name} with scope {desired_scopes} failed...")
+            fg_print.warning(f"Creating access token for user {username} {token_name}"
+                             f" with scope {desired_scopes} failed...")
             detail = self._get_exception_detail(e)
             try:
                 self.fg_api.user.delete_access_token(username=username, token=token_name)
-                user_api_token = self.fg_api.user.create_token(username=username, name=token_name, scopes=desired_scopes)
-            except Exception as e:
-                detail = self._get_exception_detail(e)
-                fg_print.error(f"Error creating temporary API token {token_name} for user {username} {detail}")
+                user_api_token = self.fg_api.user.create_token(username=username,
+                                                               name=token_name,
+                                                               scopes=desired_scopes)
+            except Exception as e1:
+                detail = self._get_exception_detail(e1)
+                fg_print.error(f"Error creating temporary API token {token_name} "
+                               f"for user {username} {detail}")
                 return None
         return user_api_token
 
 
 
-    def forgejo_add_organization(self, organization: CanonicalOrganization, existing_forgejo_org:Organization|None) -> bool:
+    def forgejo_add_organization(self, organization: CanonicalOrganization,
+                                 existing_forgejo_org:Organization|None) -> bool:
         """add a group as organization in Forgejo"""
         if existing_forgejo_org is None:
             try:
@@ -636,33 +710,39 @@ class ForgejoDestination:
                     username=organization.get_safe_username(),
                     website="",
                 )
-                fg_print.info(f"{organization.source_type} {organization.username} imported as Organization {organization.get_safe_username()}!")
+                fg_print.info(f"{organization.source_type} {organization.username} "
+                              f"imported as Organization {organization.get_safe_username()}!")
             except ConflictError:
                 return True # already exists
             except Exception as e:
                 detail = self._get_exception_detail(e)
                 fg_print.error(
-                    f"Adding {organization.source_type} {organization.username} as Organization {organization.get_safe_username()} failed: {detail}",
-                    f"Adding {organization.source_type} {organization.username} as Organization {organization.get_safe_username()} failed",
+                    f"Adding {organization.source_type} {organization.username} "
+                    f"as Organization {organization.get_safe_username()} failed: {detail}",
+                    f"Adding {organization.source_type} {organization.username} "
+                    f"as Organization {organization.get_safe_username()} failed",
                 )
                 return False
-        # return true even if the organization already exists, because the existence of the organization is not a failure for the import of the group, we just skip it and continue with the import of the group members and projects
+        # return true even if the organization already exists, because the existence of
+        # the organization is not a failure for the import of the group, we just skip it
+        # and continue with the import of the group members and projects
         return True
 
 
 
-    def forgejo_add_organization_team(self, org_name: str, definition : ForgejoTeamDefinition) -> Team | None:
+    def forgejo_add_organization_team(self, org_name: str,
+                                      definition : ForgejoTeamDefinition) -> Team | None:
         """Add a team to an organization"""
         try:
             team = self.fg_api.organization.org_create_team(org=org_name,
-                                                name=definition.name,
-                                                can_create_org_repo=definition.permissions.can_create_org_repo, 
-                                                description=definition.description,
-                                                includes_all_repositories=definition.permissions.includes_all_repositories,
-                                                permission=definition.permissions.permission,
-                                                units=list(definition.permissions.units_map.keys()),
-                                                units_map=definition.permissions.units_map
-                                                )
+                        name=definition.name,
+                        can_create_org_repo=definition.permissions.can_create_org_repo,
+                        description=definition.description,
+                        includes_all_repositories=definition.permissions.includes_all_repositories,
+                        permission=definition.permissions.permission,
+                        units=list(definition.permissions.units_map.keys()),
+                        units_map=definition.permissions.units_map
+                        )
             fg_print.info(f"Added team {definition.name} to organization {org_name}")
             return team
         except Exception as e:
@@ -674,29 +754,35 @@ class ForgejoDestination:
             return None
 
 
-    def forgejo_add_user_to_organization_team(self, username: str, organization_name: str, team: Team) -> bool:
+    def forgejo_add_user_to_organization_team(self, username: str,
+                                              organization_name: str, team: Team) -> bool:
         """add a user to a team for a group"""
-        
+
         try:
             self.fg_api.organization.org_add_team_member(team.id, username)
-            fg_print.info(f"User {username} added to team {team.name} of organization {organization_name}!")
+            fg_print.info(f"User {username} added to team {team.name}"
+                          f" of organization {organization_name}!")
         except Exception as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
-                f"Failed to add member {username} to team {team.name} of organization {organization_name}: {detail}",
-                f"Failed to add member {username} to team {team.name} for organization {organization_name}",
+                f"Failed to add member {username} to team {team.name} "
+                f"of organization {organization_name}: {detail}",
+                f"Failed to add member {username} to team {team.name} "
+                f"for organization {organization_name}",
             )
             return False
         return True
 
 
 
-    def forgejo_add_milestone(self, owner: str, repo: str, forgejo_milestones:list[Milestone], title: str, description: str, due_date: str, state: str) -> bool:
+    def forgejo_add_milestone(self, owner: str, repo: str, forgejo_milestones:list[Milestone],
+                              title: str, description: str, due_date: str, state: str) -> bool:
         """add a milestone to a repository"""
-        forgejo_milestone : Milestone = self.find_forgejo_milestone_by_title(forgejo_milestones, title)
+        forgejo_milestone : Milestone = self.find_forgejo_milestone_by_title(forgejo_milestones,
+                                                                             title)
 
         # if the milestone doesn't exist in the list
-        if forgejo_milestone == None:
+        if forgejo_milestone is None:
             if due_date:
                 due_date = dateutil.parser.parse(due_date).strftime(
                     "%Y-%m-%dT%H:%M:%SZ"
@@ -704,7 +790,9 @@ class ForgejoDestination:
 
             try:
                 forgejo_milestones.append(
-                    self.fg_api.issue.create_milestone(owner, repo, title=title, description=description, due_on=due_date, state=state)
+                    self.fg_api.issue.create_milestone(owner, repo, title=title,
+                                                       description=description,
+                                                       due_on=due_date, state=state)
                 )
             except Exception as e:
                 detail = self._get_exception_detail(e)
@@ -714,22 +802,24 @@ class ForgejoDestination:
                 )
                 return False
         return True
-            
 
 
-    def forgejo_update_organization_team(self, team:Team, current_definition:ForgejoTeamDefinition, new_definition:ForgejoTeamDefinition) -> Team | None :
+
+    def forgejo_update_organization_team(self, team:Team, current_definition:ForgejoTeamDefinition,
+                                         new_definition:ForgejoTeamDefinition) -> Team | None :
         """Rename a Forgejo Team (e.g. Owners)"""
         try:
-            fg_print.info(f"Updating Forgejo team {team.name} using new definition {new_definition}...")
+            fg_print.info(f"Updating Forgejo team {team.name}"
+                          f" using new definition {new_definition}...")
             updated = self.fg_api.organization.org_edit_team(id=team.id,
-                                                        name=new_definition.name,
-                                                        can_create_org_repo=new_definition.permissions.can_create_org_repo, 
-                                                        description=new_definition.description,
-                                                        includes_all_repositories=new_definition.permissions.includes_all_repositories,
-                                                        permission=new_definition.permissions.permission,
-                                                        units=list(new_definition.permissions.units_map.keys()),
-                                                        units_map=new_definition.permissions.units_map
-                                                        )
+                    name=new_definition.name,
+                    can_create_org_repo=new_definition.permissions.can_create_org_repo,
+                    description=new_definition.description,
+                    includes_all_repositories=new_definition.permissions.includes_all_repositories,
+                    permission=new_definition.permissions.permission,
+                    units=list(new_definition.permissions.units_map.keys()),
+                    units_map=new_definition.permissions.units_map
+                    )
             changes = current_definition.diff(new_definition)
             fg_print.info(f"Updated Forgejo team {team.name} changes: {changes}")
             return updated
@@ -740,32 +830,40 @@ class ForgejoDestination:
                 f"Failed to update team {team.name} in Forgejo {detail}",
             )
             return None
-        
+
     def _get_exception_detail(self, e: Exception) -> str:
         if isinstance(e, ApiError):
             body = getattr(e, "body", None)
             detail = body.get("message") if isinstance(body, dict) else str(body)
-            if("token does not have at least one of required scope" in detail):
+            if "token does not have at least one of required scope" in detail:
                 fg_print.error(f"Trapped Error {detail}")
-                fg_print.error(f"ERROR: Access Token used MUST have read+write permission on everything (permission:all) and be admin. Please create a new one and update the .migrate.ini file.")
+                fg_print.error("ERROR: Access Token used MUST have read+write"
+                               " permission on everything (permission:all) and be"
+                               " admin. Please create a new one and update the .migrate.ini file.")
                 os.sys.exit(1)
         else:
             detail = str(e)
         return detail
 
-    def addTeamMapping(self, map_from_role:ForgejoRepositoryRole, to_role:ForgejoRepositoryRole):
-        """Add a custom team mapping for an access level not explicitly defined in Forgejo  but encountered during migration"""
+    def add_team_mapping(self, map_from_role:ForgejoRepositoryRole, to_role:ForgejoRepositoryRole):
+        """Add a custom team mapping for an access level not explicitly
+           defined in Forgejo  but encountered during migration"""
         new_team = deepcopy(self.team_definitions[to_role])
         new_team.name=map_from_role
-        new_team.description="Temporary team for grouping collaborators with unmapped source access permission"
+        new_team.description="Temporary team for grouping collaborators with" \
+                             " unmapped source access permission"
         self.team_definitions[map_from_role]=new_team
-    
-    def addRoleMapping(self, map_from_role:ForgejoRepositoryRole, to_existing_role:ForgejoRepositoryRole):
-        """Add a custom user role mapping for an access level not explicitly defined in Forgejo  but encountered during migration.
-            Note that the default Forgejo permissions values in here are used for both team and user of same role"""
+
+    def add_role_mapping(self, map_from_role:ForgejoRepositoryRole,
+                         to_existing_role:ForgejoRepositoryRole):
+        """Add a custom user role mapping for an access level not explicitly defined in
+           Forgejo  but encountered during migration.
+            Note that the default Forgejo permissions values in here are used for both
+            team and user of same role"""
         new_role_permissions_definition = deepcopy(self.role_definitions[to_existing_role])
         new_role_permissions_definition.name=map_from_role.id
-        new_role_permissions_definition.description="Temporary Role for collaborators with unmapped source access permission"
+        new_role_permissions_definition.description="Temporary Role for collaborators"\
+                                                    " with unmapped source access permission"
         self.role_definitions[ForgejoRepositoryRole]=new_role_permissions_definition
 
 
@@ -778,6 +876,9 @@ class ForgejoDestination:
         team_members_cache: dict[int, set[str]],
         is_new_team: bool,
     ):
+        """Create an entry in the team for every user with a username in the set
+           provided. Uses the team_members_cache to identify existing team users
+           from previous operations"""
         # ---------------------------------------------
         # STEP 1: resolve existing members
         # ---------------------------------------------
@@ -829,47 +930,56 @@ class ForgejoDestination:
                     f"Failed to add {username} to team {dest_team.name}"
                 )
 
-    
 
-    def _import_individual_user_collaborator(self,
+
+    def import_individual_user_collaborator(self,
                                             existing_collaborator_ids:set[int],
                                             accessor:CanonicalRepoMembership,
                                             source_repo:CanonicalRepo,
                                             forgejo_permissions:CreateTeamOptionPermission):
-        """identical to _import_individual_collaborator except first checks a user exists in Forgejo with that username"""
+        """identical to _import_individual_collaborator except first checks
+           a user exists in Forgejo with that username"""
         forgejo_user = self.get_forgejo_user(username=accessor.get_safe_username())
         if forgejo_user is not None:
             self.forgejo_add_replace_collaboration(
                                         existing_collaborator_ids=existing_collaborator_ids,
                                         user=forgejo_user,
                                         repo=source_repo,
-                                        permissions=forgejo_permissions) 
-            fg_print.info(f"Registered Forgejo user {accessor.username} as collaborator of {source_repo.get_safe_username()}")
+                                        permissions=forgejo_permissions)
+            fg_print.info(f"Registered Forgejo user {accessor.username}"
+                          f" as collaborator of {source_repo.get_safe_username()}")
         else:
-            fg_print.error(f"Unable to add non existent Forgejo user {accessor.get_safe_username()} as collaborator of {source_repo.get_safe_username()}",
-                            f"Unable to add non existent Forgejo user {accessor.get_safe_username()} as collaborator of {source_repo.get_safe_username()}")
-            
-    
-    
+            fg_print.error(f"Unable to add non existent Forgejo user {accessor.get_safe_username()}"
+                           f" as collaborator of {source_repo.get_safe_username()}",
+                           f"Unable to add non existent Forgejo user {accessor.get_safe_username()}"
+                           f" as collaborator of {source_repo.get_safe_username()}")
 
-    def _resolve_forgejo_repo_owner(self, source_repo: CanonicalRepo) -> CanonicalRepoOwner | None:
-        
+
+
+
+    def resolve_forgejo_repo_owner(self, source_repo: CanonicalRepo) -> CanonicalRepoOwner | None:
+
         if source_repo.is_individual:
             if user := self.get_forgejo_user(username=source_repo.get_safe_owner_name()):
                 return self._get_owner_identity(user)
             else:
-                fg_print.error(f"Failed to retrieve Forgejo owner User for Forgejo repository {source_repo.get_safe_username()}, skipping import of {source_repo.source_type} {source_repo.name}!")
+                fg_print.error( "Failed to retrieve Forgejo owner User for Forgejo repository"
+                               f" {source_repo.get_safe_username()}, skipping import of "
+                               f"{source_repo.source_type} {source_repo.name}!")
         else:
-            if org := self.get_forgejo_organization(repo=source_repo, org_name=source_repo.get_safe_owner_name()):
+            if org := self.get_forgejo_organization_owner_of_repository(repo=source_repo):
                 return self._get_owner_identity(org)
             else:
-                fg_print.error(f"Failed to retrieve Forgejo owner organization for repository {source_repo.get_safe_username()}, skipping import of {source_repo.source_type} {source_repo.name}!")
+                fg_print.error( "Failed to retrieve Forgejo owner organization for repository "
+                               f"{source_repo.get_safe_username()}, skipping import of "
+                               f"{source_repo.source_type} {source_repo.name}!")
         return None
-    
+
 
 
     @staticmethod
     def _get_owner_identity(forgejo_owner : Organization|User) -> CanonicalRepoOwner:
-        # org has a username, user has a login... either is used as identity of owner for any given repository
+        # org has a username, user has a login... either is used as identity
+        # of owner for any given repository
         name = getattr(forgejo_owner, "username", None) or getattr(forgejo_owner, "login", None)
         return CanonicalRepoOwner(id=forgejo_owner.id, username=name)
