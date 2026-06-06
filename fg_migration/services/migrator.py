@@ -5,6 +5,7 @@ import datetime as datetime
 from pyforgejo import Organization, Repository, Team, User
 import requests
 
+from fg_migration.strategies.access_level_strategy import AccessLevelAccessMappingStrategy
 from fg_migration.utils import fg_print
 from fg_migration.strategies.access_mapping_strategy import AccessMappingStrategy
 from fg_migration.adapters.forgeo_types import ForgejoApiBuilder, IterativeFetchError
@@ -29,7 +30,7 @@ class Migrator:
         self.migration_config = migration_config
         self.migration_source = migration_source
         self.fg_api_builder = fg_api_builder
-        self.access_mapping_strategy = AccessMappingStrategy(migration_dest=self.migration_dest)
+        self.access_mapping_strategy = AccessLevelAccessMappingStrategy(migration_dest=self.migration_dest, migration_config=self.migration_config)
         self.run_logic_checks()
 
     
@@ -189,14 +190,6 @@ class Migrator:
     #                     f"Issue {issue.title} import failed: {detail}"
     #                     f"Failed to import issue {issue.title} for project {forgejo_safe_project_name} in Forgejo: {detail}",
     #                 )
-
-
-
-    @staticmethod
-    def _get_owner_identity(forgejo_owner : Organization|User) -> CanonicalRepoOwner:
-        # org has a username, user has a login... either is used as identity of owner for any given repository
-        name = getattr(forgejo_owner, "username", None) or getattr(forgejo_owner, "login", None)
-        return CanonicalRepoOwner(id=forgejo_owner.id, username=name)
 
 
 

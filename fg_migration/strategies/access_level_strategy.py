@@ -4,6 +4,7 @@ from typing import override
 
 from pyforgejo import Team
 
+from fg_migration.core.config_types import MigrationConfig
 from fg_migration.utils import fg_print
 from fg_migration.strategies.access_mapping_strategy import AccessMappingStrategy
 from fg_migration.core.canonical_types import CanonicalGroupMembership, CanonicalOrganization, CanonicalRepo, CanonicalRepoMemberships, CanonicalUser
@@ -36,9 +37,11 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
     """
 
     migration_dest:ForgejoDestination
+    migration_config:MigrationConfig
 
-    def __init__(self, migration_dest:ForgejoDestination):
+    def __init__(self, migration_dest:ForgejoDestination, migration_config:MigrationConfig):
         self.migration_dest = migration_dest
+        self.migration_config = migration_config
     
     @dataclass
     class TeamMatchResult:
@@ -152,7 +155,7 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
             # ---------------------------------------------------
             # STEP 3: attach users (idempotent)
             # ---------------------------------------------------
-            self.migration_dest.import_team_users_from_usernames(
+            self.import_team_users_from_usernames(
                 organization=organization,
                 usernames=usernames,
                 dest_team=existing_team,
@@ -160,6 +163,22 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
                 is_new_team=is_new_team,
             )
 
+
+    def import_team_users_from_usernames(
+            self,
+            organization: CanonicalOrganization,
+            usernames: set[str],
+            dest_team: Team,
+            team_members_cache: dict[int, set[str]],
+            is_new_team: bool,
+        ):
+        self.migration_dest.import_team_users_from_usernames(
+                organization=organization,
+                usernames=usernames,
+                dest_team=dest_team,
+                team_members_cache=team_members_cache,
+                is_new_team=is_new_team,
+            )
 
 
     @override

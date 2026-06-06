@@ -794,7 +794,7 @@ class ForgejoDestination:
                 try:
                     existing_member_names = {
                         m.login
-                        for m in self.migration_dest.iter_forgejo_team_members(
+                        for m in self.iter_forgejo_team_members(
                             team=dest_team
                         )
                         if m.login
@@ -817,7 +817,7 @@ class ForgejoDestination:
             if username in existing_member_names:
                 continue
 
-            added = self.migration_dest.forgejo_add_user_to_organization_team(
+            added = self.forgejo_add_user_to_organization_team(
                 organization_name=organization.get_safe_username(),
                 username=username,
                 team=dest_team,
@@ -838,9 +838,9 @@ class ForgejoDestination:
                                             source_repo:CanonicalRepo,
                                             forgejo_permissions:CreateTeamOptionPermission):
         """identical to _import_individual_collaborator except first checks a user exists in Forgejo with that username"""
-        forgejo_user = self.migration_dest.get_forgejo_user(username=accessor.get_safe_username())
+        forgejo_user = self.get_forgejo_user(username=accessor.get_safe_username())
         if forgejo_user is not None:
-            self.migration_dest.forgejo_add_replace_collaboration(
+            self.forgejo_add_replace_collaboration(
                                         existing_collaborator_ids=existing_collaborator_ids,
                                         user=forgejo_user,
                                         repo=source_repo,
@@ -856,13 +856,21 @@ class ForgejoDestination:
     def _resolve_forgejo_repo_owner(self, source_repo: CanonicalRepo) -> CanonicalRepoOwner | None:
         
         if source_repo.is_individual:
-            if user := self.migration_dest.get_forgejo_user(username=source_repo.get_safe_owner_name()):
+            if user := self.get_forgejo_user(username=source_repo.get_safe_owner_name()):
                 return self._get_owner_identity(user)
             else:
                 fg_print.error(f"Failed to retrieve Forgejo owner User for Forgejo repository {source_repo.get_safe_username()}, skipping import of {source_repo.source_type} {source_repo.name}!")
         else:
-            if org := self.migration_dest.get_forgejo_organization(repo=source_repo, org_name=source_repo.get_safe_owner_name()):
+            if org := self.get_forgejo_organization(repo=source_repo, org_name=source_repo.get_safe_owner_name()):
                 return self._get_owner_identity(org)
             else:
                 fg_print.error(f"Failed to retrieve Forgejo owner organization for repository {source_repo.get_safe_username()}, skipping import of {source_repo.source_type} {source_repo.name}!")
         return None
+    
+
+
+    @staticmethod
+    def _get_owner_identity(forgejo_owner : Organization|User) -> CanonicalRepoOwner:
+        # org has a username, user has a login... either is used as identity of owner for any given repository
+        name = getattr(forgejo_owner, "username", None) or getattr(forgejo_owner, "login", None)
+        return CanonicalRepoOwner(id=forgejo_owner.id, username=name)
