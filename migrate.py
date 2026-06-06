@@ -88,7 +88,8 @@ def main():
     migration_source : MigrationSource = GitLabMigrationSource(gitlab_api=gl_api,
                                                                gitlab_config=gitlab_config,
                                                                gitlab_migration_config=migration_config_gitlab)
-    migration_dest : ForgejoDestination = ForgejoDestination(fg_api=fg_api, forgejo_config=forgejo_config)
+    migration_dest : ForgejoDestination = ForgejoDestination(fg_api=fg_api,
+                                                             forgejo_config=forgejo_config)
     migrator = Migrator(migration_config=migration_config,
                         migration_source=migration_source,
                         migration_dest=migration_dest,
@@ -99,7 +100,8 @@ def main():
         migrator.import_users()
     # IMPORT Organizations and Teams (Groups and their member Users)
     if args["groups"] or args["all"]:
-         # Note, import_groups uses the gitlab projects object because they're intrinsically linked really.
+         # Note, import_groups uses the gitlab projects object
+         # because they're intrinsically linked really.
         migrator.import_organizations()
     # IMPORT Repositories (Projects) AND OR Collaborators (Memberships of Projects)
     if args["projects"] or args["membership"] or args["all"]:

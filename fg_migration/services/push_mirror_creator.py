@@ -1,3 +1,4 @@
+"""For creation of PushMirrors"""
 import os
 
 import gitlab
@@ -9,7 +10,7 @@ from fg_migration.core.config_types import ForgejoConfig, GitLabConfig
 
 
 class PushMirrorCreator:
-
+    """For creation of PushMirrors"""
     fg_api : PyforgejoApi
     forgejo_config : ForgejoConfig
     gitlab_config : GitLabConfig
@@ -23,6 +24,7 @@ class PushMirrorCreator:
 
 
     def close(self) -> None:
+        """Close the API interface (permanent)"""
         self.forgejo_api.close()
 
 
@@ -201,7 +203,8 @@ class PushMirrorCreator:
                             if mirror.remote_address == self._build_gitlab_repo_url(owner, repo)),
                             None)
                 if mirror is not None:
-                    fg_print.info(f"Push mirror already exists on Forgejo for {owner}/{repo}, skipping creation")
+                    fg_print.info("Push mirror already exists on Forgejo "
+                                  f"for {owner}/{repo}, skipping creation")
                     continue
 
             success = self._create_forgejo_push_mirror(owner=owner, repo=repo)
@@ -212,13 +215,15 @@ class PushMirrorCreator:
 
     def _build_gitlab_repo_url(self, owner: str, repo: str) -> str:
         if self.gitlab_config.GITLAB_SYNC_CONNECTION_TYPE == "ssh":
-            return f"git@{self.gitlab_config.GITLAB_URL.replace('https://', '').replace('http://', '')}:{owner}/{repo}.git"
+            return f"git@{self.gitlab_config.GITLAB_URL
+                          .replace('https://', '').replace('http://', '')}:{owner}/{repo}.git"
         else:
             return f"{self.gitlab_config.GITLAB_URL}/{owner}/{repo}.git"
 
 
 
-    def _get_project_owner_and_repo(self, project: gitlab.v4.objects.Project) -> tuple[str, str] | None:
+    def _get_project_owner_and_repo(self, project:
+                                    gitlab.v4.objects.Project) -> tuple[str, str] | None:
         proj_path = project.path_with_namespace
 
         fg_print.info(f"Project: {proj_path}")
