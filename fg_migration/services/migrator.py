@@ -11,7 +11,7 @@ from fg_migration.adapters.forgeo_types import ForgejoApiBuilder, IterativeFetch
 from fg_migration.core.migration_source_type import MigrationSource
 from fg_migration.core.canonical_types import (CanonicalOrganizations, CanonicalRepo,
                                                CanonicalSystemUser)
-from fg_migration.adapters.forgjo import ForgejoDestination
+from fg_migration.adapters.destination_forgjo import ForgejoDestination
 from fg_migration.core.config_types import MigrationConfig
 
 

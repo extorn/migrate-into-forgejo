@@ -14,25 +14,28 @@ class PushMirrorCreator:
     forgejo_config : ForgejoConfig
     gitlab_config : GitLabConfig
 
-    def __init__(self, fg_api:PyforgejoApi, forgejo_config: ForgejoConfig, gitlab_config : GitLabConfig):
+    def __init__(self, fg_api:PyforgejoApi,
+                 forgejo_config: ForgejoConfig, gitlab_config : GitLabConfig):
         self.forgejo_config = forgejo_config
         self.gitlab_config = gitlab_config
         self.forgejo_api = fg_api
 
-    
+
 
     def close(self) -> None:
         self.forgejo_api.close()
 
 
 
-    def _get_exception_detail(e: Exception) -> str:
+    def _get_exception_detail(self, e: Exception) -> str:
         if isinstance(e, ApiError):
             body = getattr(e, "body", None)
             detail = body.get("message") if isinstance(body, dict) else str(body)
-            if("token does not have at least one of required scope" in detail):
+            if "token does not have at least one of required scope" in detail:
                 fg_print.error(f"Trapped Error {detail}")
-                fg_print.error(f"ERROR: Access Token used MUST have read+write permission on everything (permission:all) and be admin. Please create a new one and update the .migrate.ini file.")
+                fg_print.error("ERROR: Access Token used MUST have read+write permission on "
+                               "everything (permission:all) and be admin. Please create a new "
+                               "one and update the .migrate.ini file.")
                 os.sys.exit(1)
         else:
             detail = str(e)
@@ -149,8 +152,8 @@ class PushMirrorCreator:
                 )
 
 
-    def delete_to_forgejo(
-        gitlab_projects: list[gitlab.v4.objects.Project],
+    def delete_to_forgejo(self,
+        gitlab_projects: list[gitlab.v4.objects.Project]
     ) -> None:
         """Delete push mirrors from GitLab to Forgejo"""
 
@@ -227,9 +230,9 @@ class PushMirrorCreator:
                 f"Invalid repository path: {proj_path}"
             )
             return None
-        
+
         return path_parts[0], path_parts[1]
-                    
+
 
 
     def delete_to_gitlab(self,
@@ -248,7 +251,7 @@ class PushMirrorCreator:
             for mirror in mirrors:
                 if mirror.remote_address != gitlab_url:
                     continue
-                
+
                 remote_name = mirror.remote_name
 
                 if remote_name is None:

@@ -5,12 +5,13 @@ import time
 from typing import Callable, Iterator, TypeVar, override
 
 import gitlab  # pip install python-gitlab
+import gitlab.v4 # pylint: disable=no-name-in-module
 import gitlab.v4.objects
 import requests
 import yaml
 
 from fg_migration.utils import fg_print
-from fg_migration.adapters.forgjo import ForgejoRepositoryRole
+from fg_migration.adapters.destination_forgjo import ForgejoRepositoryRole
 from fg_migration.core.migration_source_type import MigrationSource
 from fg_migration.core.canonical_types import CanonicalGpgKey, CanonicalGroupMembership, CanonicalKey, CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoMembership, CanonicalRepoMemberships, CanonicalSystemUser, CanonicalUser
 from fg_migration.core.config_types import GitLabMigrationConfig, GitLabConfig
@@ -56,9 +57,8 @@ class GitLabApiPaginator:
                     # no more to load
                     break
         except Exception as e:
-            detail = self._get_exception_detail(e)
             msg = f"Failed to retrieve existing {self.items_type} page[{page_idx}]" \
-                  f"{self.retrieval_detail} {detail}"
+                  f"{self.retrieval_detail} {e}"
             fg_print.error(msg)
             raise IterativeFetchError(msg) from e
 
@@ -102,7 +102,8 @@ class GitLabApiBuilder:
 
 
 class GitLabMigrationSource(MigrationSource):
-    """A Gitlab implementation of a MigrationSource for Forgejo. Note that all lists are retrieved in one operation, without paging"""
+    """A Gitlab implementation of a MigrationSource for Forgejo.
+       Note that all lists are retrieved in one operation, without paging"""
 
     gitlab_api: gitlab.Gitlab
     gitlab_config: GitLabConfig
@@ -118,7 +119,8 @@ class GitLabMigrationSource(MigrationSource):
         self.gitlab_api = gitlab_api
         self.gitlab_config = gitlab_config
         self.gitlab_migration_config = gitlab_migration_config
-        self.access_level_role_map = self._load_access_levels_roles_map(path=self.gitlab_migration_config.ACCESS_LEVELS_TO_FORGEJO_ROLES_MAP_FILE_PATH)
+        self.access_level_role_map = self._load_access_levels_roles_map(
+            path=self.gitlab_migration_config.ACCESS_LEVELS_TO_FORGEJO_ROLES_MAP_FILE_PATH)
 
     def _load_access_levels_roles_map(self, path: str) -> dict[int,ForgejoRepositoryRole]:
         with open(path, "r", encoding="utf-8") as f:
@@ -136,8 +138,11 @@ class GitLabMigrationSource(MigrationSource):
 
 
 
-    def _iter_all_emails_of_user(self, user: gitlab.v4.objects.User) -> Iterator[gitlab.v4.objects.UserEmail]:
-        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="UserEmails")
+    def _iter_all_emails_of_user(self,
+                                 user: gitlab.v4.objects.User
+                                 ) -> Iterator[gitlab.v4.objects.UserEmail]:
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api,
+                                       page_size=50, items_type="UserEmails")
         return paginator.iterate(fetch_page_from_api=
             lambda gl_api, page, limit: user.emails.list(
                 page=page,
@@ -148,7 +153,8 @@ class GitLabMigrationSource(MigrationSource):
 
 
     def _iter_all_projects(self) -> Iterator[gitlab.v4.objects.Project]:
-        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="Projects")
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api,
+                                       page_size=50, items_type="Projects")
         return paginator.iterate(fetch_page_from_api=
             lambda gl_api, page, limit: gl_api.projects.list(
                 page=page,
@@ -158,8 +164,11 @@ class GitLabMigrationSource(MigrationSource):
 
 
 
-    def _iter_all_groups_of_project(self, project: gitlab.v4.objects.Project) -> Iterator[gitlab.v4.objects.Group]:
-        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="Project Groups")
+    def _iter_all_groups_of_project(self,
+                                    project: gitlab.v4.objects.Project
+                                    ) -> Iterator[gitlab.v4.objects.Group]:
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api,
+                                       page_size=50, items_type="Project Groups")
         return paginator.iterate(fetch_page_from_api=
             lambda gl_api, page, limit: project.groups.list(
                 page=page,
@@ -288,7 +297,7 @@ class GitLabMigrationSource(MigrationSource):
 
 
     @override
-    def get_source_system_name(self) -> str:
+    def getSourceSystemName(self) -> str:
         return self.source_system
 
 
@@ -403,7 +412,7 @@ class GitLabMigrationSource(MigrationSource):
 
 
 
-    def _list_repository_accessors_inherited(self, project: gitlab.v4.objects.Project, repository:CanonicalRepo) -> list[CanonicalRepoMembership]:
+    def _list_repository_accessors_direct(self, project: gitlab.v4.objects.Project, repository:CanonicalRepo) -> list[CanonicalRepoMembership]:
         """List all those repository accessors that are directly added to this project"""
         repo_accessors_members : list[CanonicalRepoMembership] = []
 
@@ -429,16 +438,21 @@ class GitLabMigrationSource(MigrationSource):
     def list_repository_accessors(self, repo:CanonicalRepo) -> CanonicalRepoMemberships:
         # gitlab project = forgejo repo
         project: gitlab.v4.objects.Project = self.gitlab_api.projects.get(id=repo.source_id)
-        fg_print.debug(f"Listing accessors for project id {repo.source_id}, project {project.path}  [{project.name}]")
+        fg_print.debug(f"Listing accessors for project id {repo.source_id}, "
+                       f"project {project.path}  [{project.name}]")
         repo_accessors_members : list[CanonicalRepoMembership] = []
-        repo_accessors = CanonicalRepoMemberships(source_system=self.source_system, source_type="Users", members=repo_accessors_members)
+        repo_accessors = CanonicalRepoMemberships(source_system=self.source_system,
+                                                  source_type="Users",
+                                                  members=repo_accessors_members)
 
         if not repo.is_individual:
             # These are INHERITED accessors (of the gitlab group that owns this project)
-            repo_accessors_members += self._list_repository_accessors_inherited(project=project, repository=repo)
+            repo_accessors_members += self._list_repository_accessors_inherited(project=project,
+                                                                                repository=repo)
 
         # These are DIRECT accessors
-        repo_accessors_members += self._list_repository_accessors_inherited(project=project, repository=repo)
+        repo_accessors_members += self._list_repository_accessors_direct(project=project,
+                                                                         repository=repo)
 
         return repo_accessors
 
@@ -543,25 +557,35 @@ class GitLabMigrationSource(MigrationSource):
                 except AttributeError:
                     avatar_url = None
 
-                emailAddress : str = self._build_or_extract_email(user)
+                email_address : str = self._build_or_extract_email(user)
                 try:
-                    canonical_keys = [CanonicalKey(name=key.title, key=key.key) for key in self._iter_all_public_keys_of_user(user)]
+                    canonical_keys = [CanonicalKey(name=key.title, key=key.key)
+                                      for key in self._iter_all_public_keys_of_user(user)]
+
                     canonical_gpg_keys : list[CanonicalGpgKey] = []
                     for gpg_key in self._iter_all_gpg_keys_of_user(user):
                         key_id = getattr(gpg_key, "key_id", None)
 
                         key_content = (getattr(gpg_key, "public_key", None)
                                     or getattr(gpg_key, "key", None))
-                        canonical_gpg_keys.append(CanonicalGpgKey(name=key_id, armored_public_key=key_content, armored_signature=None))
+                        canonical_gpg_keys.append(CanonicalGpgKey(name=key_id,
+                                                                  armored_public_key=key_content,
+                                                                  armored_signature=None))
                 except IterativeFetchError:
-                    fg_print.error(f"Failed to load keys for User, User will not be imported and import will need to be run again for Users.")
+                    fg_print.error("Failed to load keys for User, User will not be imported and "
+                                   "import will need to be run again for Users.")
                     continue
 
-                canonical_users.append(CanonicalSystemUser(gpg_keys=canonical_gpg_keys,keys=canonical_keys,
-                                                        email=emailAddress, full_name=user.name,
-                                                        username=user.username, source_system=self.source_system, avatar_url=avatar_url))
+                canonical_users.append(CanonicalSystemUser(gpg_keys=canonical_gpg_keys,
+                                                           keys=canonical_keys,
+                                                           email=email_address,
+                                                           full_name=user.name,
+                                                           password=None,
+                                                           username=user.username,
+                                                           source_system=self.source_system,
+                                                           avatar_url=avatar_url))
         except IterativeFetchError:
-            fg_print.error(f"Failed to load all Users, import will need to be run again for Users.")
+            fg_print.error("Failed to load all Users, import will need to be run again for Users.")
 
         return canonical_users
 

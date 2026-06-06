@@ -14,7 +14,7 @@ from fg_migration.core.canonical_types import (CanonicalGroupMembership, Canonic
 from fg_migration.adapters.forgeo_types import (ForgejoRepositoryRole,
                                                 ForgejoRolePermissionDefinition,
                                                 ForgejoTeamDefinition, IterativeFetchError)
-from fg_migration.adapters.forgjo import ForgejoDestination
+from fg_migration.adapters.destination_forgjo import ForgejoDestination
 from fg_migration.core.migration_source_type import MigrationSource
 from fg_migration.utils.utils import name_clean
 

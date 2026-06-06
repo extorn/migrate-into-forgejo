@@ -3,7 +3,7 @@ from typing import override
 
 from pyforgejo import Team
 
-from fg_migration.adapters.forgjo import ForgejoDestination
+from fg_migration.adapters.destination_forgjo import ForgejoDestination
 from fg_migration.core.config_types import MigrationConfig
 from fg_migration.strategies.access_mapping_strategy import AccessMappingStrategy
 from fg_migration.core.canonical_types import (

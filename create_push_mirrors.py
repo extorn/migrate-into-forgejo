@@ -26,7 +26,7 @@ from docopt import docopt
 from fg_migration.utils import fg_print
 from fg_migration.core.config_types import ForgejoConfig, GitLabConfig
 from fg_migration.adapters.forgeo_types import ForgejoApiBuilder
-from fg_migration.adapters.gitlab import GitLabApiBuilder
+from fg_migration.adapters.source_gitlab import GitLabApiBuilder
 from fg_migration.services.push_mirror_creator import PushMirrorCreator
 
 SCRIPT_VERSION = "0.2"
@@ -109,7 +109,7 @@ def main():
             pmc.to_forgejo(projects)
 
         if args["to-gitlab"] or args["all"]:
-            pmc.to_gitlab(fg_api, projects)
+            pmc.to_gitlab(projects)
 
     elif args["delete"]:
 
@@ -119,7 +119,7 @@ def main():
             pmc.delete_to_forgejo(projects)
 
         if args["to-gitlab"] or args["all"]:
-            pmc.delete_to_gitlab(fg_api, projects)
+            pmc.delete_to_gitlab(projects)
 
     else:
         fg_print.error(
