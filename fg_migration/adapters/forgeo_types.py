@@ -9,7 +9,7 @@ import time
 from typing import Callable, TypeVar, Iterator, override
 # Forgejo API imports:
 from pyforgejo import ApiError, CreateTeamOptionPermission, PyforgejoApi, Team
-import pyforgejo
+
 
 from fg_migration.utils import fg_print
 from fg_migration.core.config_types import ForgejoConfig
@@ -23,7 +23,7 @@ class ForgejoApiBuilder:
     def __init__(self, forgejo_config:ForgejoConfig):
         self.config = forgejo_config
 
-    def build_forgejo_api_client(self, api_key: str | None = None) -> pyforgejo.PyforgejoApi:
+    def build_forgejo_api_client(self, api_key: str | None = None) -> PyforgejoApi:
         """Build a Forgejo API Client using either the API key provided, or the default API key"""
         api_token : str
         if api_key is None:
@@ -50,6 +50,7 @@ class ForgejoApiBuilder:
 
     def test_forgejo_connection(self, fg_api:PyforgejoApi) -> bool:
         """Run an API call to ensure the connection was successful"""
+
         try:
             response = fg_api.miscellaneous.get_version()
         except Exception as e:
@@ -113,11 +114,11 @@ class ForgejoTeamDefinition:
 
             role_permissions = role_builder.get_role_permissions(role)
             # we don't cache these because teams are only unique in a given organization.
-            return ForgejoTeamDefinition(name=team.name,
-                                         description=team.description,
-                                         permissions=role_permissions)
+            return ForgejoTeamDefinition(name = team.name,
+                                         description = team.description,
+                                         permissions = role_permissions)
 
-        raise Exception("Role builder not available")
+        raise ValueError("Role builder not available")
 
     def diff(self, other:ForgejoTeamDefinition) -> str :
         """Provide an equality check against an-other role permission. Just

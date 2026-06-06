@@ -5,6 +5,7 @@ import random
 import string
 from typing import Iterator
 from pyforgejo.core import RequestOptions
+from requests import RequestException
 from typing_extensions import deprecated
 
 import dateutil.parser
@@ -270,7 +271,7 @@ class ForgejoDestination:
             fg_print.debug(f"Loaded organization {org.full_name} for {org.source_system}"
                            f" {org.source_type} {org.name}!")
             return org
-        except Exception as e:
+        except (NotFoundError, ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(f"Failed to retrieve forgejo organization {org.get_safe_username()}"
                            f" for repo {org.get_safe_username()} using {org.source_system}"
@@ -289,7 +290,7 @@ class ForgejoDestination:
             fg_print.debug(f"Loaded organization {org.full_name} for {repo.source_system}"
                            f" {repo.source_type} {repo.name}!")
             return org
-        except Exception as e:
+        except (NotFoundError, ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(f"Failed to retrieve forgejo organization {org_name} "
                            f"for repo {repo.get_safe_username()} using {repo.source_system}"
@@ -304,7 +305,7 @@ class ForgejoDestination:
             user = self.fg_api.user.get(username)
             fg_print.debug(f"loaded user {user.username}!")
             return user
-        except Exception as e:
+        except (NotFoundError, ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(f"Failed to retrieve Forgejo user {username}! {detail}")
         return None
@@ -320,7 +321,7 @@ class ForgejoDestination:
             return True
         except NotFoundError:
             return False
-        except Exception as e:
+        except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.info(f"User {username} not found in Forgejo, importing! {detail}")
             return False
@@ -339,14 +340,13 @@ class ForgejoDestination:
                 fg_print.warning(f"{repo.source_type} {repo.name}"
                                   " already exists in Forgejo, skipping!")
                 return True
-        except Exception as e:
-            if isinstance(e, NotFoundError):
-                fg_print.info(f"{repo.source_type} {repo.name} not found in Forgejo, importing!")
-                return False
-            else:
-                detail = self._get_exception_detail(e)
-                fg_print.error(f"Failed to check if {repo.source_type} {repo.name} "
-                               f"exists in Forgejo for owner {owner_username}! {detail}")
+        except NotFoundError:
+            fg_print.info(f"{repo.source_type} {repo.name} not found in Forgejo, importing!")
+            return False
+        except (ApiError, RequestException) as e:
+            detail = self._get_exception_detail(e)
+            fg_print.error(f"Failed to check if {repo.source_type} {repo.name} "
+                           f"exists in Forgejo for owner {owner_username}! {detail}")
 
 
         fg_print.info(f"{repo.source_type} {repo.name} not found in Forgejo, importing!")
@@ -447,11 +447,11 @@ class ForgejoDestination:
                                                             collaborator = collaborator_username)
             fg_print.debug(f"User {collaborator_username} removed as collaborator"
                            f" from repository {repo.get_safe_username()}")
-        except Exception as e:
+        except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
-                    f"User {collaborator_username} removal as collaborator from "
-                    f"repository {repo.get_safe_username()} failed: {detail}")
+                f"User {collaborator_username} removal as collaborator from "
+                f"repository {repo.get_safe_username()} failed: {detail}")
             return False
         return True
 
@@ -493,7 +493,7 @@ class ForgejoDestination:
                                                         permission = permission)
             fg_print.debug(f"Collaboration on {repo.get_safe_username()} "
                            f"for user {collaborator_username} recorded!")
-        except Exception as e:
+        except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(f"Failed to add Collaboration for user {collaborator_username}"
                            f" on {repo.get_safe_username()}: {detail}")
@@ -530,7 +530,7 @@ class ForgejoDestination:
                 return True
             except ConflictError:
                 return True # already exists
-            except Exception as e:
+            except (ApiError, RequestException) as e:
                 detail = self._get_exception_detail(e)
                 fg_print.error(f"Failed to import {user.source_system} user {user.username}"
                                f" as {user.get_safe_username()}: {detail}",
@@ -550,7 +550,7 @@ class ForgejoDestination:
         try:
             self.fg_api.repository.repo_add_team(owner=owner_username,repo=repo_name,team=team_name)
             return True
-        except Exception as e:
+        except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
                 f"Adding team {team_name} to Repository {repo_name} Failed: {detail}",
@@ -572,7 +572,7 @@ class ForgejoDestination:
             )
             fg_print.info(f"Public key {key_name} imported for user {username}!")
             return new_key
-        except Exception as e:
+        except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
                 f"Public key {key_name} import failed: {detail}",
@@ -644,7 +644,7 @@ class ForgejoDestination:
                 )
             fg_print.info(f"GPG key {key_id} imported for user {username}!")
             return new_key
-        except Exception as e:
+        except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
                 f"GPG key {key_id} import failed: {e}",
@@ -660,7 +660,7 @@ class ForgejoDestination:
         """Delete an Access Token for the user (if using sudo)"""
         try:
             self.fg_api.user.delete_access_token(username=username, token=token_name)
-        except Exception as e:
+        except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
                 f"Delete temporary user api token {token_name} of user {username} failed: {detail}",
@@ -680,7 +680,7 @@ class ForgejoDestination:
                           f" with scope {desired_scopes}")
             user_api_token = self.fg_api.user.create_token(username=username,
                                                            name=token_name, scopes=desired_scopes)
-        except Exception as e:
+        except (ApiError, RequestException) as e:
             fg_print.warning(f"Creating access token for user {username} {token_name}"
                              f" with scope {desired_scopes} failed...")
             detail = self._get_exception_detail(e)
@@ -689,7 +689,7 @@ class ForgejoDestination:
                 user_api_token = self.fg_api.user.create_token(username=username,
                                                                name=token_name,
                                                                scopes=desired_scopes)
-            except Exception as e1:
+            except (ApiError, RequestException) as e1:
                 detail = self._get_exception_detail(e1)
                 fg_print.error(f"Error creating temporary API token {token_name} "
                                f"for user {username} {detail}")
@@ -714,7 +714,7 @@ class ForgejoDestination:
                               f"imported as Organization {organization.get_safe_username()}!")
             except ConflictError:
                 return True # already exists
-            except Exception as e:
+            except (ApiError, RequestException) as e:
                 detail = self._get_exception_detail(e)
                 fg_print.error(
                     f"Adding {organization.source_type} {organization.username} "
@@ -745,7 +745,7 @@ class ForgejoDestination:
                         )
             fg_print.info(f"Added team {definition.name} to organization {org_name}")
             return team
-        except Exception as e:
+        except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
                 f"Failed to add team {definition.name} to organization {org_name}: {detail}",
@@ -762,7 +762,7 @@ class ForgejoDestination:
             self.fg_api.organization.org_add_team_member(team.id, username)
             fg_print.info(f"User {username} added to team {team.name}"
                           f" of organization {organization_name}!")
-        except Exception as e:
+        except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
                 f"Failed to add member {username} to team {team.name} "
@@ -794,7 +794,7 @@ class ForgejoDestination:
                                                        description=description,
                                                        due_on=due_date, state=state)
                 )
-            except Exception as e:
+            except (ApiError, RequestException) as e:
                 detail = self._get_exception_detail(e)
                 fg_print.error(
                     f"Milestone {title} import failed: {detail}",
@@ -823,7 +823,7 @@ class ForgejoDestination:
             changes = current_definition.diff(new_definition)
             fg_print.info(f"Updated Forgejo team {team.name} changes: {changes}")
             return updated
-        except Exception as e:
+        except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
                 f"Update Forgejo Team {team.name} to {new_definition} failed: {detail}",
@@ -848,11 +848,11 @@ class ForgejoDestination:
     def add_team_mapping(self, map_from_role:ForgejoRepositoryRole, to_role:ForgejoRepositoryRole):
         """Add a custom team mapping for an access level not explicitly
            defined in Forgejo  but encountered during migration"""
-        new_team = deepcopy(self.team_definitions[to_role])
-        new_team.name=map_from_role
-        new_team.description="Temporary team for grouping collaborators with" \
-                             " unmapped source access permission"
-        self.team_definitions[map_from_role]=new_team
+        new_team_definition = deepcopy(self.team_definitions[to_role])
+        new_team_definition.name = map_from_role
+        new_team_definition.description = "Temporary team for grouping collaborators with" \
+                                          " unmapped source access permission"
+        self.team_definitions[map_from_role] = new_team_definition
 
     def add_role_mapping(self, map_from_role:ForgejoRepositoryRole,
                          to_existing_role:ForgejoRepositoryRole):
@@ -958,21 +958,21 @@ class ForgejoDestination:
 
 
     def resolve_forgejo_repo_owner(self, source_repo: CanonicalRepo) -> CanonicalRepoOwner | None:
-
+        """Return the owner object for the repository provided. None if there was some problem"""
         if source_repo.is_individual:
             if user := self.get_forgejo_user(username=source_repo.get_safe_owner_name()):
                 return self._get_owner_identity(user)
-            else:
-                fg_print.error( "Failed to retrieve Forgejo owner User for Forgejo repository"
-                               f" {source_repo.get_safe_username()}, skipping import of "
-                               f"{source_repo.source_type} {source_repo.name}!")
+
+            fg_print.error( "Failed to retrieve Forgejo owner User for Forgejo repository"
+                            f" {source_repo.get_safe_username()}, skipping import of "
+                            f"{source_repo.source_type} {source_repo.name}!")
         else:
             if org := self.get_forgejo_organization_owner_of_repository(repo=source_repo):
                 return self._get_owner_identity(org)
-            else:
-                fg_print.error( "Failed to retrieve Forgejo owner organization for repository "
-                               f"{source_repo.get_safe_username()}, skipping import of "
-                               f"{source_repo.source_type} {source_repo.name}!")
+
+            fg_print.error( "Failed to retrieve Forgejo owner organization for repository "
+                            f"{source_repo.get_safe_username()}, skipping import of "
+                            f"{source_repo.source_type} {source_repo.name}!")
         return None
 
 

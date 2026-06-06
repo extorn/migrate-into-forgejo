@@ -85,9 +85,10 @@ def main():
         os.sys.exit()
 
 
-    migration_source : MigrationSource = GitLabMigrationSource(gitlab_api=gl_api,
-                                                               gitlab_config=gitlab_config,
-                                                               gitlab_migration_config=migration_config_gitlab)
+    migration_source : MigrationSource = GitLabMigrationSource(
+                                                gitlab_api=gl_api,
+                                                gitlab_config=gitlab_config,
+                                                gitlab_migration_config=migration_config_gitlab)
     migration_dest : ForgejoDestination = ForgejoDestination(fg_api=fg_api,
                                                              forgejo_config=forgejo_config)
     migrator = Migrator(migration_config=migration_config,
