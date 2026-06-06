@@ -6,7 +6,7 @@ from pyforgejo import Team
 
 from fg_migration.utils import fg_print
 from fg_migration.strategies.access_mapping_strategy import AccessMappingStrategy
-from fg_migration.core.canonical_types import CanonicalGroupMembership, CanonicalOrganization, CanonicalRepo, CanonicalRepoMembership, CanonicalRepoMemberships, CanonicalUser
+from fg_migration.core.canonical_types import CanonicalGroupMembership, CanonicalOrganization, CanonicalRepo, CanonicalRepoMemberships, CanonicalUser
 from fg_migration.adapters.forgeo_types import ForgejoRepositoryRole, ForgejoRolePermissionDefinition, ForgejoTeamDefinition, IterativeFetchError
 from fg_migration.adapters.forgjo import ForgejoDestination
 from fg_migration.core.migration_source_type import MigrationSource
