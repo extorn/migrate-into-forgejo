@@ -12,7 +12,7 @@ import yaml
 from fg_migration import fg_print
 from fg_migration.forgjo import ForgejoRepositoryRole
 from fg_migration.migration_source_type import MigrationSource
-from fg_migration.canonical_types import CanonicalGpgKey, CanonicalKey, CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoAccessor, CanonicalRepoAccessors, CanonicalSystemUser, CanonicalTeam, CanonicalUser
+from fg_migration.canonical_types import CanonicalGpgKey, CanonicalGroupMembership, CanonicalKey, CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoMembership, CanonicalRepoMemberships, CanonicalSystemUser, CanonicalTeam, CanonicalUser
 from fg_migration.config_types import GitLabMigrationConfig, GitLabConfig
 
 
@@ -368,10 +368,10 @@ class GitLabMigrationSource(MigrationSource):
     
 
 
-    def _list_repository_accessors_inherited(self, project: gitlab.v4.objects.Project) -> list[CanonicalRepoAccessor]:
+    def _list_repository_accessors_inherited(self, project: gitlab.v4.objects.Project, repository:CanonicalRepo) -> list[CanonicalRepoMembership]:
         """List all those repository accessors that are inherited from a group in the hierarchy to which the project belongs"""
 
-        repo_accessors_members : list[CanonicalRepoAccessor] = []
+        repo_accessors_members : list[CanonicalRepoMembership] = []
         # ancestor_groups = project.groups.list(get_all=True)
         # group_ids = [anc.get_id() for anc in self._iter_all_groups_of_project(project)]
         try:
@@ -391,7 +391,7 @@ class GitLabMigrationSource(MigrationSource):
                                 continue
                             else:
                                 fg_print.warning(f"Likely a GitLab specific system user {group_member.username}. Can possibly be deleted after import!")
-                        repo_accessors_members.append(CanonicalRepoAccessor(username = group_member.username, access_level= group_member.access_level))
+                        repo_accessors_members.append(CanonicalRepoMembership(username = group_member.username, repository=repository, access_level= group_member.access_level))
                 except IterativeFetchError:
                     fg_print.error(f"Failed to load all Group Members for Group {group.path}. Import will need to be run again for Repository Accessors")
         except IterativeFetchError:
@@ -400,9 +400,9 @@ class GitLabMigrationSource(MigrationSource):
     
 
 
-    def _list_repository_accessors_inherited(self, project: gitlab.v4.objects.Project) -> list[CanonicalRepoAccessor]:
+    def _list_repository_accessors_inherited(self, project: gitlab.v4.objects.Project, repository:CanonicalRepo) -> list[CanonicalRepoMembership]:
         """List all those repository accessors that are directly added to this project"""
-        repo_accessors_members : list[CanonicalRepoAccessor] = []
+        repo_accessors_members : list[CanonicalRepoMembership] = []
 
         # project_members: list[gitlab.v4.objects.ProjectMember] = project.members.list(get_all=True)
         project_member : gitlab.v4.objects.ProjectMember
@@ -416,26 +416,26 @@ class GitLabMigrationSource(MigrationSource):
                     else:
                         fg_print.warning(f"Likely a GitLab specific system user {project_member.username}. Can possibly be deleted after import!")
                 fg_print.debug(f"Added accessor {project_member.username} for project {project.path}")
-                repo_accessors_members.append(CanonicalRepoAccessor(username = project_member.username, access_level= project_member.access_level))
+                repo_accessors_members.append(CanonicalRepoMembership(username = project_member.username, repository=repository, access_level= project_member.access_level))
         except IterativeFetchError:
             fg_print.error(f"Failed to load all Project Members for Project {project.path}. Import will need to be run again for Repository Accessors")
         return repo_accessors_members
 
 
     @override
-    def list_repository_accessors(self, repo:CanonicalRepo) -> CanonicalRepoAccessors:
+    def list_repository_accessors(self, repo:CanonicalRepo) -> CanonicalRepoMemberships:
         # gitlab project = forgejo repo
         project: gitlab.v4.objects.Project = self.gitlab_api.projects.get(id=repo.source_id)
         fg_print.debug(f"Listing accessors for project id {repo.source_id}, project {project.path}  [{project.name}]")
-        repo_accessors_members : list[CanonicalRepoAccessor] = []
-        repo_accessors = CanonicalRepoAccessors(source_system=self.source_system, source_type="Users", members=repo_accessors_members)
+        repo_accessors_members : list[CanonicalRepoMembership] = []
+        repo_accessors = CanonicalRepoMemberships(source_system=self.source_system, source_type="Users", members=repo_accessors_members)
         
         if not repo.is_individual:
             # These are INHERITED accessors (of the gitlab group that owns this project)
-            repo_accessors_members += self._list_repository_accessors_inherited(project=project)
+            repo_accessors_members += self._list_repository_accessors_inherited(project=project, repository=repo)
             
         # These are DIRECT accessors
-        repo_accessors_members += self._list_repository_accessors_inherited(project=project)
+        repo_accessors_members += self._list_repository_accessors_inherited(project=project, repository=repo)
         
         return repo_accessors
 
@@ -443,78 +443,78 @@ class GitLabMigrationSource(MigrationSource):
 
     @override
     def list_organizations(self) -> CanonicalOrganizations:
-        # read all users
-        # groups: list[gitlab.v4.objects.Group] = self.gitlab_api.groups.list(get_all=True)
-        
-        organizations = CanonicalOrganizations(source_type="Groups", members=[])
+        organizations = CanonicalOrganizations(
+            source_type="Groups",
+            members=[]
+        )
 
-        group : gitlab.v4.objects.Group
-
-        # Each group is essentially mapping as repository (or series of) owner (Forgejo organization)
         try:
             for group in self._iter_all_groups():
-                # create a map only to avoid searching for the right team for each user
-                #TODO currently though we have a list of Teams for each org, we simply
-                #     add users to the first matching team in the access level. If actually there are multiple
-                #     users with same access level in a group, but not all sharing access to same repository,
-                #     we'll need to create multiple teams, depending on repository access (which might get complicated quickly)
-                access_role_teams_map: dict[int,list[CanonicalTeam]] = {}
-                
-                # Group members are users. They share a finite set of access_level
-                # we can map that access level to a team.
-                # groupMembers: list[gitlab.v4.objects.GroupMember] = group.members.list(get_all=True)
-                
-                # For every user that has access to this group
+
+                fg_print.debug(
+                    f"name={group.name} path={group.path} fullname={group.full_name}"
+                )
+
+                org_users: dict[str, CanonicalUser] = {}
+                memberships: list[CanonicalGroupMembership] = []
+
                 try:
                     for member in self._iter_all_members_of_group(group=group):
+
+                        # handle ignored users
                         if self._is_ignore_gitlab_user(member.username):
                             if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
-                                fg_print.warning(f"Ignored a GitLab specific system user {member.username}. If this is incorrect, rerun import permitting system user cloning")
+                                fg_print.warning(
+                                    f"Ignored GitLab system user {member.username}"
+                                )
                                 continue
                             else:
-                                fg_print.warning(f"Likely a GitLab specific system user {member.username}. Can possibly be deleted after import!")
+                                fg_print.warning(
+                                    f"Likely GitLab system user {member.username}"
+                                )
 
-                        # get the correct team
-                        team = self._find_or_create_team(access_level_teams_map=access_role_teams_map, access_level=member.access_level)
-                        
-                        # add the user to the team
-                        team.users.append(CanonicalUser(username=member.username))
+                        # store user (deduplicated)
+                        if member.username not in org_users:
+                            org_users[member.username] = CanonicalUser(
+                                username=member.username
+                            )
 
-                    # create an organization
-                    #We use the gitlab api Group path because it matches that used in the creation of CanonicalRepo (which is essential to link the two together during import)
-                    # We clean this up before using it in forgejo as a quasi identifier, so in theory we could use .name instead, but we'd need to to update how we load CanonicalRepo too.
-                    fg_print.debug(f"name={group.name} path={group.path} fullname={group.full_name}")
-                    this_org = CanonicalOrganization(source_type="Group", username=group.path, full_name=group.full_name, 
-                                                    description=group.description, teams=[
-                                                                                            team
-                                                                                            for team_list in access_role_teams_map.values()
-                                                                                            for team in team_list
-                                                                                        ],) # Note have to flatten the list of teams per access_level here.
-                    # add the org to the list
-                    organizations.members.append(this_org)
-                    if this_org.username is None:
-                        os.sys.exit(1)
+                        # store membership FACT (this is the important part)
+                        memberships.append(
+                            CanonicalGroupMembership(
+                                group_path=group.path,
+                                username=member.username,
+                                access_level=member.access_level,
+                            )
+                        )
+
                 except IterativeFetchError:
-                    fg_print.error(f"Failed to load members for {self.source_system} Group {group.path}, import will need to be run again for Organizations and Teams.")
-                    # continue with next group.
+                    fg_print.error(
+                        f"Failed to load members for {self.source_system} "
+                        f"Group {group.path}. Skipping group membership capture."
+                    )
                     continue
+
+                this_org = CanonicalOrganization(
+                    source_type="Group",
+                    username=group.path,
+                    full_name=group.full_name,
+                    description=group.description,
+                    members=list(org_users.values()),
+                    memberships=memberships,
+                )
+
+                organizations.members.append(this_org)
+
+                if this_org.username is None:
+                    os.sys.exit(1)
+
         except IterativeFetchError:
-            fg_print.error(f"Failed to load all Groups, import will need to be run again for Organizations and Teams.")
+            fg_print.error(
+                "Failed to load all Groups. Import incomplete for Organizations."
+            )
+
         return organizations
-
-
-
-    def _find_or_create_team(self, access_level_teams_map:dict[int,list[CanonicalTeam]], access_level:int) -> CanonicalTeam:
-        # create a new team for each access level that doesn't already have one.
-        if access_level not in access_level_teams_map:
-            # create a new team for this access level, we will fill the users later
-            access_level_teams_map[access_level] = [CanonicalTeam(
-                                                        username=None,
-                                                        source_access_level=str(access_level),
-                                                        users=[]
-                                                    )]
-        teams = access_level_teams_map[access_level]
-        return teams[0] #TODO we're not defining teams per repo yet.
 
 
 

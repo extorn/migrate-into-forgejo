@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from fg_migration.canonical_types import CanonicalOrganizations, CanonicalRepo, CanonicalRepoAccessors, CanonicalSystemUser
+from fg_migration.canonical_types import CanonicalOrganizations, CanonicalRepo, CanonicalRepoMemberships, CanonicalSystemUser
 from fg_migration.forgjo import ForgejoRepositoryRole
 
 
@@ -24,7 +24,7 @@ class MigrationSource(ABC):
         pass
 
     @abstractmethod
-    def list_repository_accessors(self, repo:CanonicalRepo) -> CanonicalRepoAccessors:
+    def list_repository_accessors(self, repo:CanonicalRepo) -> CanonicalRepoMemberships:
         """Build and return a List all those individuals who use a repository"""
         pass
 

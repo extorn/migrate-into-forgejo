@@ -18,7 +18,7 @@ from pyforgejo.core.api_error import ApiError
 import yaml
 
 from fg_migration import fg_print
-from fg_migration.canonical_types import CanonicalOrganization, CanonicalRepo, CanonicalRepoOwner, CanonicalSystemUser, CanonicalTeam
+from fg_migration.canonical_types import CanonicalOrganization, CanonicalRepo, CanonicalRepoMembership, CanonicalRepoOwner, CanonicalSystemUser
 from fg_migration.config_types import ForgejoConfig
 from fg_migration.forgeo_types import ApiPaginator, ForgejoRepositoryRole, ForgejoRolePermissionDefinition, ForgejoTeamDefinition, ForgejoTeamRoleBuilder, ForgejoTeamRoleMapper, IterativeFetchError
 
@@ -26,7 +26,7 @@ from fg_migration.forgeo_types import ApiPaginator, ForgejoRepositoryRole, Forge
 class ForgejoDestination:
     """This is a wrapper around a destination for the migration"""
     
-    fg_api : pyforgejo.PyforgejoApi
+    fg_api : PyforgejoApi
     forgejo_config : ForgejoConfig
     default_role_definitions : dict[ForgejoRepositoryRole,ForgejoRolePermissionDefinition]
     default_team_definitions : dict[ForgejoRepositoryRole,ForgejoTeamDefinition]
@@ -34,7 +34,7 @@ class ForgejoDestination:
     team_definitions : dict[ForgejoRepositoryRole,ForgejoTeamDefinition]
     forgejo_team_to_role_mapper : ForgejoTeamRoleBuilder
 
-    def __init__(self, fg_api:pyforgejo.PyforgejoApi, forgejo_config:ForgejoConfig):
+    def __init__(self, fg_api:PyforgejoApi, forgejo_config:ForgejoConfig):
         self.fg_api = fg_api
         self.forgejo_config = forgejo_config
         self.default_role_definitions, self.default_team_definitions = self.load_roles(path=forgejo_config.USER_ROLES_FILE_PATH)
@@ -484,18 +484,18 @@ class ForgejoDestination:
     def forgejo_add_team_to_repository(self,
                                         owner_username:str,
                                         repo_name:str,
-                                        team_name:str):
+                                        team_name:str) -> bool :
         """Add a team to a repository"""
         try:
             self.fg_api.repository.repo_add_team(owner=owner_username,repo=repo_name,team=team_name)
+            return True
         except Exception as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
                 f"Adding team {team_name} to Repository {repo_name} Failed: {detail}",
                 f"Adding team {team_name} to Repository {repo_name} Failed: {detail}",
             )
-            return None
-
+            return False
 
 
     def forgejo_add_user_key(self, username : str, key_name : str, key_content : str) -> PublicKey|None :
@@ -768,3 +768,101 @@ class ForgejoDestination:
         new_role_permissions_definition.name=map_from_role.id
         new_role_permissions_definition.description="Temporary Role for collaborators with unmapped source access permission"
         self.role_definitions[ForgejoRepositoryRole]=new_role_permissions_definition
+
+
+
+    def import_team_users_from_usernames(
+        self,
+        organization: CanonicalOrganization,
+        usernames: set[str],
+        dest_team: Team,
+        team_members_cache: dict[int, set[str]],
+        is_new_team: bool,
+    ):
+        # ---------------------------------------------
+        # STEP 1: resolve existing members
+        # ---------------------------------------------
+        team_key = dest_team.id
+        if team_key is None:
+            fg_print.error(f"Team id is not set for team {dest_team.name}")
+        if team_key in team_members_cache:
+            existing_member_names = team_members_cache[team_key]
+        else:
+            if is_new_team:
+                existing_member_names = set()
+            else:
+                try:
+                    existing_member_names = {
+                        m.login
+                        for m in self.migration_dest.iter_forgejo_team_members(
+                            team=dest_team
+                        )
+                        if m.login
+                    }
+                except IterativeFetchError:
+                    fg_print.warning(
+                        f"Could not fetch members for team {dest_team.name}, "
+                        f"assuming empty (may cause duplicates)"
+                    )
+                    existing_member_names = set()
+
+            # cache is purely optional optimisation
+            team_members_cache[team_key] = existing_member_names
+
+        # ---------------------------------------------
+        # STEP 2: reconcile membership (idempotent)
+        # ---------------------------------------------
+        for username in usernames:
+
+            if username in existing_member_names:
+                continue
+
+            added = self.migration_dest.forgejo_add_user_to_organization_team(
+                organization_name=organization.get_safe_username(),
+                username=username,
+                team=dest_team,
+            )
+
+            if added:
+                existing_member_names.add(username)
+            else:
+                fg_print.error(
+                    f"Failed to add {username} to team {dest_team.name}"
+                )
+
+    
+
+    def _import_individual_user_collaborator(self,
+                                            existing_collaborator_ids:set[int],
+                                            accessor:CanonicalRepoMembership,
+                                            source_repo:CanonicalRepo,
+                                            forgejo_permissions:CreateTeamOptionPermission):
+        """identical to _import_individual_collaborator except first checks a user exists in Forgejo with that username"""
+        forgejo_user = self.migration_dest.get_forgejo_user(username=accessor.get_safe_username())
+        if forgejo_user is not None:
+            self.migration_dest.forgejo_add_replace_collaboration(
+                                        existing_collaborator_ids=existing_collaborator_ids,
+                                        user=forgejo_user,
+                                        repo=source_repo,
+                                        permissions=forgejo_permissions) 
+            fg_print.info(f"Registered Forgejo user {accessor.username} as collaborator of {source_repo.get_safe_username()}")
+        else:
+            fg_print.error(f"Unable to add non existent Forgejo user {accessor.get_safe_username()} as collaborator of {source_repo.get_safe_username()}",
+                            f"Unable to add non existent Forgejo user {accessor.get_safe_username()} as collaborator of {source_repo.get_safe_username()}")
+            
+    
+    
+
+    def _resolve_forgejo_repo_owner(self, source_repo: CanonicalRepo) -> CanonicalRepoOwner | None:
+        
+        if source_repo.is_individual:
+            if user := self.migration_dest.get_forgejo_user(username=source_repo.get_safe_owner_name()):
+                return self._get_owner_identity(user)
+            else:
+                fg_print.error(f"Failed to retrieve Forgejo owner User for Forgejo repository {source_repo.get_safe_username()}, skipping import of {source_repo.source_type} {source_repo.name}!")
+        else:
+            if org := self.migration_dest.get_forgejo_organization(repo=source_repo, org_name=source_repo.get_safe_owner_name()):
+                return self._get_owner_identity(org)
+            else:
+                fg_print.error(f"Failed to retrieve Forgejo owner organization for repository {source_repo.get_safe_username()}, skipping import of {source_repo.source_type} {source_repo.name}!")
+        return None

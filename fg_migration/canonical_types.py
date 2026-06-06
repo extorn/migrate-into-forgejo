@@ -60,24 +60,24 @@ class CanonicalOrganizations:
 
 
 @dataclass
+class CanonicalGroupMembership:
+    group_path: str
+    username: str
+    access_level: int
+
+
+
+@dataclass
 class CanonicalOrganization:
     source_type:str # what is this type defined as at source e.g. for gitlab, Group
     username: str
     full_name:str
     description:str
-    teams:list[CanonicalTeam] = field(default_factory=list)
+    members: list[CanonicalUser] = field(default_factory=list)
+    memberships: list[CanonicalGroupMembership] = field(default_factory=list)
 
     def get_safe_username(self) -> str:
         return name_clean(self.username)
-
-@dataclass
-class CanonicalTeam:
-    username: str
-    source_access_level:str # what is the access level defined in the source system for this team
-    users:list[CanonicalUser] = field(default_factory=list)
-
-    #def get_safe_username(self) -> str:
-    #    return name_clean(self.username)
 
 
 
@@ -92,8 +92,9 @@ class CanonicalRepoOwner:
 
 
 @dataclass(frozen=True) # This allows use in sets, and I can think of no good reason to ever alter the contents.
-class CanonicalRepoAccessor:
+class CanonicalRepoMembership:
     username:str
+    repository:CanonicalRepo
     access_level:str
 
     def get_safe_username(self) -> str:
@@ -102,14 +103,14 @@ class CanonicalRepoAccessor:
 
 
 @dataclass
-class CanonicalRepoAccessors:
+class CanonicalRepoMemberships:
     source_system:str # e.g. gitlab
-    members:list[CanonicalRepoAccessor] = field(default_factory=list)
+    members:list[CanonicalRepoMembership] = field(default_factory=list)
     source_type:str = "Users" # what is this type defined as at source e.g. for gitlab, Users
     
     @staticmethod
-    def get_grouped_by_access_level(members:list[CanonicalRepoAccessor]) -> dict[str,set[CanonicalRepoAccessor]]:
-        grouped_by_access_level : dict[str,set[CanonicalRepoAccessor]] = {}
+    def get_grouped_by_access_level(members:list[CanonicalRepoMembership]) -> dict[str,set[CanonicalRepoMembership]]:
+        grouped_by_access_level : dict[str,set[CanonicalRepoMembership]] = {}
         for member in members:
             grouped_by_access_level.get(member.access_level, set()).add(member)
         return grouped_by_access_level
