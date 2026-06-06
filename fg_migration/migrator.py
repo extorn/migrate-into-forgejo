@@ -8,7 +8,7 @@ from pyforgejo import CreateTeamOptionPermission, Organization, Repository, Team
 import requests
 
 from fg_migration import fg_print
-from fg_migration.forgeo_types import ForgejoApiBuilder
+from fg_migration.forgeo_types import ForgejoApiBuilder, IterativeFetchError
 from fg_migration.migration_source_type import MigrationSource
 from fg_migration.canonical_types import CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoAccessor, CanonicalRepoAccessors, CanonicalRepoOwner, CanonicalSystemUser, CanonicalTeam, CanonicalUser
 from fg_migration.forgjo import ForgejoDestination, ForgejoRepositoryRole, ForgejoRolePermissionDefinition, ForgejoTeamDefinition
@@ -84,7 +84,10 @@ class Migrator:
     #     """import milestones for a repository from a gitlab project"""
     #     forgejo_safe_project_name = name_clean(project_name)
     #     forgejo_safe_project_owner_name = name_clean(project_owner)
-    #     forgejo_milestones = self.migration_dest.get_forgejo_milestones(owner=forgejo_safe_project_owner_name, repo=forgejo_safe_project_name)
+    #     try:
+    #       forgejo_milestones = list(self.migration_dest.iter_forgejo_milestones(owner=forgejo_safe_project_owner_name, repo=forgejo_safe_project_name))
+    #     except IterativeFetchError:
+    #       pass
     #     for milestone in milestones:
     #         # Note: forgejo_add_milestone appends to the cached list of forgejo_milestones too for efficiency.
     #         success = self.migration_dest.forgejo_add_milestone(owner=forgejo_safe_project_owner_name, repo=forgejo_safe_project_name, 
@@ -107,11 +110,12 @@ class Migrator:
     #     forgejo_safe_project_name = name_clean(project_name)
 
     #     # reload all existing milestones and labels, needed for assignment in issues
-    #     forgejo_milestones = self.migration_dest.get_forgejo_milestones(owner=forgejo_safe_project_owner, repo=forgejo_safe_project_name)
-    #     forgejo_labels = self.migration_dest._get_forgejo_labels(owner=forgejo_safe_project_owner, repo=forgejo_safe_project_name)
-    #     # get a list of all existing forgejo issues
-    #     forgejo_issues = self.migration_dest.get_forgejo_issues(owner=forgejo_safe_project_owner, repo=forgejo_safe_project_name)
-        
+    #     try:
+    #       forgejo_milestones = list(self.migration_dest.iter_forgejo_milestones(owner=forgejo_safe_project_owner, repo=forgejo_safe_project_name))
+    #       forgejo_labels = list(self.migration_dest.iter_forgejo_labels(owner=forgejo_safe_project_owner, repo=forgejo_safe_project_name))
+    #       forgejo_issues = list(self.migration_dest.iter_forgejo_issues(owner=forgejo_safe_project_owner, repo=forgejo_safe_project_name))
+    #     except IterativeFetchError:
+    #       pass
     #     for issue in issues:
     #         if not self.migration_dest.forgejo_issue_exists(forgejo_issues, repo=forgejo_safe_project_name, issue_title=issue.title):
     #             due_date = ""
@@ -290,30 +294,38 @@ class Migrator:
             return
         
         # get list of Users that are collaborators already.
-        existing_collaborators = self.migration_dest.get_forgejo_collaborators(owner_username=forgejo_repo_owner.username, repo=source_repo.get_safe_username())
-        existing_collaborator_ids :set[int] = {user.id
-                                                for user in existing_collaborators
-                                                if user.id is not None} # id should ALWAYS be not null since from database
+        iter_existing_collaborators = self.migration_dest.iter_forgejo_collaborators(owner_username=forgejo_repo_owner.username, repo=source_repo.get_safe_username())
+        try:
+            existing_collaborator_ids :set[int] = {user.id
+                                                    for user in iter_existing_collaborators
+                                                    if user.id is not None} # id should ALWAYS be not null since from database
+        except IterativeFetchError:
+            # I think we need to fail this part of the op and return here
+            return
 
         needs_direct_user_collaborators = False # This will become True if not all collaborators are in a team that is itself a Collaborator for this repository
         all_forgejo_teams_members_usernames : set[str] = set() # Collect all users that are members of some team
         if not source_repo.is_individual:
             # owner is an organization
-            existing_org_teams = self.migration_dest.get_forgejo_teams(org_name=forgejo_repo_owner.username)
-            existing_repo_teams = self.migration_dest.forgejo_list_team_in_repository(owner_username=forgejo_repo_owner.username, repo_name=source_repo.get_safe_username())
-            existing_repo_team_ids = {team.id for team in existing_repo_teams}
+            # existing_org_teams = self.migration_dest.get_forgejo_teams(org_name=forgejo_repo_owner.username)
+            iter_existing_repo_teams = self.migration_dest.iter_forgejo_teams_in_repository(owner_username=forgejo_repo_owner.username, repo_name=source_repo.get_safe_username())
+            existing_repo_team_ids = {team.id for team in iter_existing_repo_teams}
             needs_direct_user_collaborators = not (self.migration_config.IS_FUZZY_TEAMS_ALLOWED)
             authorized_forgejo_usernames = {member.get_safe_username() for member in repo_accessors.members}
 
             forgejo_team : Team
-            for forgejo_org_team in existing_org_teams:
+            for forgejo_org_team in self.migration_dest.iter_forgejo_teams(org_name=forgejo_repo_owner.username):
                 add_team_to_repo = False
                 if forgejo_org_team.id in existing_repo_team_ids:
                     fg_print.info(f"Skipping team {forgejo_org_team.name}, already attached to repository {source_repo.get_safe_username()}")
                     continue # examine next team in user_teams
                 
                 # Only add non empty teams if all members are repository collaborators
-                team_members = self.migration_dest.get_forgejo_team_members(team=forgejo_org_team)
+                try:
+                    team_members = list(self.migration_dest.iter_forgejo_team_members(team=forgejo_org_team))
+                except IterativeFetchError:
+                    #For now, skip this team and try the next
+                    continue
 
                 if len(team_members) == 0:
                     add_team_to_repo = self.migration_config.ADD_EMPTY_TEAMS_TO_REPOSITORIES
@@ -411,13 +423,17 @@ class Migrator:
         user:CanonicalSystemUser,
     ):
         """import public keys for a user"""
-        forgejo_keys = self.migration_dest.get_forgejo_user_keys(username=user.get_safe_username())
-        forgejo_gpg_keys = self.migration_dest.get_forgejo_user_gpg_keys(username=user.get_safe_username())
+        iter_forgejo_keys = self.migration_dest.iter_forgejo_user_keys(username=user.get_safe_username())
+        iter_forgejo_gpg_keys = self.migration_dest.iter_forgejo_user_gpg_keys(username=user.get_safe_username())
 
         #
         # SSH keys
         #
-        forgejo_key_values = {k.key for k in forgejo_keys}
+        try:
+            forgejo_key_values = {k.key for k in iter_forgejo_keys}
+        except IterativeFetchError:
+            # Allow none to be imported
+            forgejo_key_values = []
         new_keys = [key
                     for key in user.keys
                     if key.key not in forgejo_key_values]
@@ -432,7 +448,11 @@ class Migrator:
         #
         # GPG keys
         #
-        forgejo_gpg_key_values = {k.public_key for k in forgejo_gpg_keys}
+        try:
+            forgejo_gpg_key_values = {k.public_key for k in iter_forgejo_gpg_keys}
+        except IterativeFetchError:
+            # Allow none to be imported
+            forgejo_gpg_key_values = []
         new_gpg_keys = [key
                 for key in user.gpg_keys
                 if key.armored_public_key not in forgejo_gpg_key_values]
@@ -543,15 +563,20 @@ class Migrator:
                                                    organization : CanonicalOrganization,
                                                    existing_forgejo_teams_map : dict[str,Team], 
                                                    forgejo_team_definition : ForgejoTeamDefinition, 
-                                                   canonical_team_members : list[CanonicalUser]) -> TeamMatchResult:
+                                                   canonical_team_members : list[CanonicalUser]) -> TeamMatchResult|None:
         
         matched_team = self._find_matching_team(existing_forgejo_teams_map, forgejo_team_definition)
         if matched_team is None:
             return self.TeamMatchResult(matched_team=None)
         
-        existing_usernames = {member.login
-                              for member in self.migration_dest.get_forgejo_team_members(matched_team)
-                              if member.login is not None}
+        try:
+            existing_usernames = {member.login
+                                  for member in self.migration_dest.iter_forgejo_team_members(matched_team)
+                                  if member.login is not None}
+        except IterativeFetchError:
+            # bubble the problem
+            return None
+
 
         imported_usernames = { user.get_safe_username()
                                for user in canonical_team_members}
@@ -578,9 +603,14 @@ class Migrator:
            maps to a declared team or if fuzzy team matching is enabled"""
         
         # build a lookup for team name against team (lower case as Forgejo names are case insensitive.)
-        existing_forgejo_org_teams_map : dict[str,Team] = {team.name.lower():team
-                                  for team in self.migration_dest.get_forgejo_teams(org_name=organization.get_safe_username())
-                                  if team.name is not None} # If a team is returned without a name, we can't use it anyway without inferring from permissions so lets just strip them out.
+        all_teams = self.migration_dest.iter_forgejo_teams(org_name=organization.get_safe_username())
+        try:
+            existing_forgejo_org_teams_map : dict[str,Team] = {team.name.lower():team
+                                                            for team in all_teams
+                                                            if team.name is not None} # If a team is returned without a name, we can't use it anyway without inferring from permissions so lets just strip them out.
+        except IterativeFetchError:
+            #Unable to sensibly continue with this operation.
+            return
         
         existing_forgejo_org_team_names = [team.name for team in existing_forgejo_org_teams_map.values()]
         fg_print.debug(f"Existing forgejo teams for Forgejo organization {organization.get_safe_username()} : {existing_forgejo_org_team_names}")
@@ -627,6 +657,10 @@ class Migrator:
                                                                                existing_forgejo_teams_map=existing_forgejo_org_teams_map,
                                                                                forgejo_team_definition=forgejo_team_definition,
                                                                                canonical_team_members=canonical_team.users)
+            if match_result is None:
+                # there was an error calling the api, lets just skip this team
+                continue
+
             if match_result.remove_key is not None:
                 del existing_forgejo_org_teams_map[match_result.remove_key]
                 existing_forgejo_org_teams_map[match_result.renamed_team.name.lower()] = match_result.renamed_team
@@ -681,9 +715,13 @@ class Migrator:
             # we already know there are no members, we only just created it. No need to call the API.
             existing_member_names = set()
         else:
-            existing_member_names = {member.login
-                                    for member in self.migration_dest.get_forgejo_team_members(team=dest_team)
-                                    if member.login is not None}
+            try:
+                existing_member_names = {member.login
+                                        for member in self.migration_dest.iter_forgejo_team_members(team=dest_team)
+                                        if member.login is not None}
+            except IterativeFetchError:
+                # Worst case, we'll try and add a user that already exists by setting this to empty set
+                existing_member_names = set()
 
         for canonical_user in canonical_team.users:
             if canonical_user.get_safe_username() in existing_member_names:
@@ -809,13 +847,24 @@ class Migrator:
         group_names = [org.username for org in canonical_organizations.members]
         fg_print.info(f"Importing groups... {group_names}")
 
-        existing_forgejo_organizations = self.migration_dest.list_forgejo_organizations()
+        # try:
+            # We will need to repetatively check this list so I don't see it is a good idea to use iterator.
+            # Note: we could instead use get_org and get just what we need, but we can only pass in a name - is this username or name?
+            # existing_forgejo_organizations = list(self.migration_dest.iter_forgejo_organizations())
+        # except IterativeFetchError:
+        #     # lets skip import of orgs.
+        #     return
         
         for organization in canonical_organizations.members:
             # create the Forgejo organization
             fg_print.info(f"Importing {organization.source_type} {organization.username} as Forgejo organization {organization.get_safe_username()}...")
-            existing_forgejo_org = next((org for org in existing_forgejo_organizations if org.username.lower() == organization.get_safe_username().lower()), None)
-            fg_print.debug(f"Existing Forgejo organizations: {[org.username for org in existing_forgejo_organizations]}")
+            
+            #existing_forgejo_org = next((org for org in existing_forgejo_organizations if org.username.lower() == organization.get_safe_username().lower()), None)
+            
+            # This individual retrieval replaces a search through the list. I'm not sure if it'll use more time and be less reliable (more api calls)...
+            existing_forgejo_org = self.migration_dest.get_forgejo_organization(org = organization)
+            
+            # fg_print.debug(f"Existing Forgejo organizations: {[org.username for org in existing_forgejo_organizations]}")
             fg_print.debug(f"Matched = {existing_forgejo_org is not None}")
             # Add the forgejo organization
             added_org = self.migration_dest.forgejo_add_organization(organization=organization, existing_forgejo_org=existing_forgejo_org)
@@ -834,7 +883,7 @@ class Migrator:
     def import_repos(self, import_repo_content:bool=True):
         """read all projects and their issues if import_repo_content is True. Always applies Collabroration rights"""
         
-        source_repos : list[CanonicalRepo] = self.migration_source.listRepos()
+        source_repos : list[CanonicalRepo] = self.migration_source.list_repositories()
 
         source_repo : CanonicalRepo
         for source_repo in source_repos:

@@ -1,13 +1,13 @@
 
 from abc import abstractmethod
 from dataclasses import dataclass, field
+import os
 from pprint import pformat
 import re
-from typing import override
-import typing
-
+import time
+from typing import Callable, TypeVar, Iterator, override
 # Forgejo API imports:
-from pyforgejo import CreateTeamOptionPermission, PyforgejoApi, Team
+from pyforgejo import ApiError, CreateTeamOptionPermission, PyforgejoApi, Team
 import pyforgejo
 
 from fg_migration import fg_print
@@ -21,7 +21,7 @@ class ForgejoApiBuilder:
     def __init__(self, forgejo_config:ForgejoConfig):
             self.config = forgejo_config
 
-    def build_forgejo_api_client(self, api_key: str | None) -> pyforgejo.PyforgejoApi:
+    def build_forgejo_api_client(self, api_key: str | None = None) -> pyforgejo.PyforgejoApi:
         """Build a Forgejo API Client using either the API key provided, or the default API key"""
         api_token : str
         if api_key is None:
@@ -30,9 +30,9 @@ class ForgejoApiBuilder:
             api_token = api_key
         return PyforgejoApi(base_url=self.config.FORGEJO_API_URL, 
                             api_key=api_token, 
-                            httpx_client = self._build_httpx_client(config=self.config))
+                            httpx_client = self._build_httpx_client())
     
-    def _build_httpx_client(self, timeout: typing.Optional[float]=60, follow_redirects: typing.Optional[bool] = True) -> HttpxClient:
+    def _build_httpx_client(self, timeout: float = 60, follow_redirects: bool = True) -> HttpxClient:
         client = None
         if(self.config.FORGEJO_CLIENT_AUTH_CERT != None and self.config.FORGEJO_CLIENT_AUTH_KEY != None):
             cert_path = self.config.FORGEJO_CLIENT_AUTH_CERT
@@ -239,3 +239,65 @@ class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
         )
 
         return role
+    
+class IterativeFetchError(Exception):
+    pass
+
+T = TypeVar("T")
+
+class ApiPaginator:
+    fg_api:PyforgejoApi
+    max_page_size:int
+    items_type:str
+    retrieval_detail:str
+
+    def __init__(self, fg_api:PyforgejoApi, page_size:int=50, items_type:str="Items", retrieval_detail:str=""):
+        self.fg_api = fg_api
+        self.max_page_size = page_size
+        self.items_type = items_type
+        self.retrieval_detail = retrieval_detail
+
+    def iterate(self, fetch_page_from_api: Callable[[PyforgejoApi, int, int], list[T]],
+        ) -> Iterator[T]:
+        
+        page_idx = 1
+        try:
+            while True:
+                page_of_data : list
+                for attempt in range(3):
+                    try:
+                        page_of_data = fetch_page_from_api(self.fg_api, page_idx, self.max_page_size)
+                        break
+                    except TimeoutError:
+                        if attempt == 2:
+                            raise
+                        time.sleep(2 ** attempt)
+                yield from page_of_data
+                page_idx += 1
+                if len(page_of_data) < self.max_page_size:
+                    # no more to load
+                    break
+        except Exception as e:
+            detail = self._get_exception_detail(e)
+            msg = f"Failed to retrieve existing {self.items_type} page[{page_idx}]{self.retrieval_detail} {detail}"
+            fg_print.error(msg)
+            raise IterativeFetchError(msg) from e
+
+
+
+    def _get_exception_detail(self, e: Exception) -> str:
+        if isinstance(e, ApiError):
+            body = getattr(e, "body", None)
+            detail = body.get("message") if isinstance(body, dict) else str(body)
+            if("token does not have at least one of required scope" in detail):
+                fg_print.error(f"Trapped Error {detail}")
+                fg_print.error(f"ERROR: Access Token used MUST have read+write permission on everything (permission:all) and be admin. Please create a new one and update the .migrate.ini file.")
+                os.sys.exit(1)
+        else:
+            detail = str(e)
+        return detail
+
+
+
+
+

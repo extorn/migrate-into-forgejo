@@ -123,7 +123,7 @@ class PushMirrorCreator:
             )
 
             try:
-                #TODO see if we can use the auth token instead.
+                #TODO see if we can use a Forgejo auth token instead.
                 project.remote_mirrors.create(
                     {
                         "url": forgejo_push_url,

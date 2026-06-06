@@ -1,10 +1,12 @@
 
 import os
 import re
-from typing import override
+import time
+from typing import Callable, Iterator, TypeVar, override
 
 import gitlab  # pip install python-gitlab
 import gitlab.v4.objects
+import requests
 import yaml
 
 from fg_migration import fg_print
@@ -13,6 +15,52 @@ from fg_migration.migration_source_type import MigrationSource
 from fg_migration.canonical_types import CanonicalGpgKey, CanonicalKey, CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoAccessor, CanonicalRepoAccessors, CanonicalSystemUser, CanonicalTeam, CanonicalUser
 from fg_migration.config_types import GitLabMigrationConfig, GitLabConfig
 
+
+class IterativeFetchError(Exception):
+    pass
+
+T = TypeVar("T")
+
+
+class GitLabApiPaginator:
+    gl_api:gitlab.Gitlab
+    max_page_size:int
+    items_type:str
+    retrieval_detail:str
+
+    def __init__(self, gl_api:gitlab.Gitlab, page_size:int=50, items_type:str="Items", retrieval_detail:str=""):
+        self.gl_api = gl_api
+        self.max_page_size = page_size
+        self.items_type = items_type
+        self.retrieval_detail = retrieval_detail
+
+    def iterate(self, fetch_page_from_api: Callable[[gitlab.Gitlab, int, int], list[T]],
+        ) -> Iterator[T]:
+        
+        page_idx = 1
+        try:
+            while True:
+                page_of_data : list
+                for attempt in range(3):
+                    try:
+                        page_of_data = fetch_page_from_api(self.gl_api,page_idx, self.max_page_size)
+                        break
+                    except TimeoutError:
+                        if attempt == 2:
+                            raise
+                        time.sleep(2 ** attempt)
+                yield from page_of_data
+                page_idx += 1
+                if len(page_of_data) < self.max_page_size:
+                    # no more to load
+                    break
+        except Exception as e:
+            detail = self._get_exception_detail(e)
+            msg = f"Failed to retrieve existing {self.items_type} page[{page_idx}]{self.retrieval_detail} {detail}"
+            fg_print.error(msg)
+            raise IterativeFetchError(msg) from e
+
+
 class GitLabApiBuilder:
     config : GitLabConfig
 
@@ -20,8 +68,7 @@ class GitLabApiBuilder:
             self.config = gitlab_config
 
     def build_gitlab_api_client(self) -> gitlab.Gitlab:
-        #TODO confirmation needed that this session is being correctly passed into Gitlab api
-        session = self.requests.Session()
+        session = requests.Session()
         # add client authentication if cert and key are provided in the config
         if(self.config.GITLAB_CLIENT_AUTH_CERT != None and self.config.GITLAB_CLIENT_AUTH_KEY != None):
             cert_path = self.config.GITLAB_CLIENT_AUTH_CERT
@@ -38,11 +85,10 @@ class GitLabApiBuilder:
             fg_print.error(f"Failed to connect to GitLab! {e}")
             os.sys.exit()
         assert isinstance(gl.user, gitlab.v4.objects.CurrentUser)
-        fg_print.info(f"Connected to GitLab, version: {gl.version()[0]}")
         return gl
 
 
-    def test_gitlab_connection(gl_api:gitlab.Gitlab):
+    def test_gitlab_connection(self, gl_api:gitlab.Gitlab):
         version_tuple=gl_api.version()
         fg_print.info(
             f"Connected to GitLab, version: {version_tuple[0]}"
@@ -84,7 +130,105 @@ class GitLabMigrationSource(MigrationSource):
             access_level_role_map[gitlab_access_level_int] = role
 
         return access_level_role_map
+
+
+
+    def _iter_all_emails_of_user(self, user: gitlab.v4.objects.User) -> Iterator[gitlab.v4.objects.UserEmail]:
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="UserEmails")
+        return paginator.iterate(fetch_page_from_api=
+            lambda gl_api, page, limit: user.emails.list(
+                page=page,
+                per_page=limit,
+            )
+        )
+
+
+
+    def _iter_all_projects(self) -> Iterator[gitlab.v4.objects.Project]:
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="Projects")
+        return paginator.iterate(fetch_page_from_api=
+            lambda gl_api, page, limit: gl_api.projects.list(
+                page=page,
+                per_page=limit,
+            )
+        )
     
+
+
+    def _iter_all_groups_of_project(self, project: gitlab.v4.objects.Project) -> Iterator[gitlab.v4.objects.Group]:
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="Project Groups")
+        return paginator.iterate(fetch_page_from_api=
+            lambda gl_api, page, limit: project.groups.list(
+                page=page,
+                per_page=limit,
+            )
+        )
+
+
+
+    def _iter_all_groups(self) -> Iterator[gitlab.v4.objects.Group]:
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="Groups")
+        return paginator.iterate(fetch_page_from_api=
+            lambda gl_api, page, limit: gl_api.groups.list(
+                page=page,
+                per_page=limit,
+            )
+        )
+    
+
+
+    def _iter_all_members_of_group(self, group: gitlab.v4.objects.Group) -> Iterator[gitlab.v4.objects.GroupMember]:
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="Groups")
+        return paginator.iterate(fetch_page_from_api=
+            lambda gl_api, page, limit: group.members.list(
+                page=page,
+                per_page=limit,
+            )
+        )
+
+
+
+    def _iter_all_members_of_project(self, project: gitlab.v4.objects.Project) -> Iterator[gitlab.v4.objects.ProjectMember]:
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="Project Members")
+        return paginator.iterate(fetch_page_from_api=
+            lambda gl_api, page, limit: project.members.list(
+                page=page,
+                per_page=limit,
+            )
+        )
+
+
+
+    def _iter_all_users(self) -> Iterator[gitlab.v4.objects.User]:
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="Users")
+        return paginator.iterate(fetch_page_from_api=
+            lambda gl_api, page, limit: gl_api.users.list(
+                page=page,
+                per_page=limit,
+            )
+        )
+    
+
+    def _iter_all_gpg_keys_of_user(self, user:gitlab.v4.objects.User) -> Iterator[gitlab.v4.objects.UserGPGKey]:
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="UserGPGKeys")
+        return paginator.iterate(fetch_page_from_api=
+            lambda gl_api, page, limit: user.gpgkeys.list(
+                page=page,
+                per_page=limit,
+            )
+        )
+    
+
+
+    def _iter_all_public_keys_of_user(self, user:gitlab.v4.objects.User) -> Iterator[gitlab.v4.objects.UserKey]:
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="UserKeys")
+        return paginator.iterate(fetch_page_from_api=
+            lambda gl_api, page, limit: user.keys.list(
+                page=page,
+                per_page=limit,
+            )
+        )
+
 
 
     def _get_is_individual(self, project : gitlab.v4.objects.Project) -> bool:
@@ -116,18 +260,13 @@ class GitLabMigrationSource(MigrationSource):
         else:
             fg_print.debug(f"username {username} not in ignored users list {list(self.gitlab_migration_config.IGNORED_GITLAB_SYSTEM_USERS)} and does not match bot regex, will not ignore")
         return False
-        
+    
 
-
+    
     def _build_or_extract_email(self, user: gitlab.v4.objects.User) -> str:
         """build an email address for a user, if the email is not available, we use a dummy email address based on the username"""
         
         # Some gitlab instances do not publish user emails, so we use a dummy email
-        
-        try:
-            emails : list[gitlab.v4.objects.UserEmail] = user.emails.list(get_all=True)
-        except AttributeError:
-            emails = []
         
         try:
             return user.email
@@ -135,10 +274,10 @@ class GitLabMigrationSource(MigrationSource):
             pass
 
         try:
-            emails = user.emails.list(get_all=True)
+            emails = list(self._iter_all_emails_of_user(user))
             if emails:
                 return emails[0].email
-        except AttributeError:
+        except AttributeError, IterativeFetchError:
             pass
 
         return f"{user.username}@noemail-git.local"
@@ -158,47 +297,49 @@ class GitLabMigrationSource(MigrationSource):
 
 
     @override
-    def listRepos(self) -> list[CanonicalRepo]:
-        projects: list[gitlab.v4.objects.Project] = self.gitlab_api.projects.list(get_all=True)
-        fg_print.info(f"Found {len(projects)} gitlab projects as user {self.gitlab_api.user.username}")
+    def list_repositories(self) -> list[CanonicalRepo]:
+        # projects: list[gitlab.v4.objects.Project] = self.gitlab_api.projects.list(get_all=True)
+        # fg_print.info(f"Found {len(projects)} gitlab projects as user {self.gitlab_api.user.username}")
 
         repos : list[CanonicalRepo] = []
         project : gitlab.v4.objects.Project
         seen_repos_map: dict[int,str] = {}
-        for project in projects:
-            if project.get_id() in seen_repos_map:
-                fg_print.error(f"Already have reference to Project {seen_repos_map[project.get_id()]} with ID {project.get_id()}")
-                continue
+        try:
+            for project in self._iter_all_projects():
+                if project.get_id() in seen_repos_map:
+                    fg_print.error(f"Already have reference to Project {seen_repos_map[project.get_id()]} with ID {project.get_id()}")
+                    continue
 
-            owner_name = self._get_gitlab_project_owner_slug(project)
+                owner_name = self._get_gitlab_project_owner_slug(project)
 
-            if owner_name is None:
-                continue # unable to continue with this project
-            
-            is_individual = self._get_is_individual(project)
-            # clone_url = project.web_url
+                if owner_name is None:
+                    continue # unable to continue with this project
+                
+                is_individual = self._get_is_individual(project)
+                # clone_url = project.web_url
 
-            repo_name = self._get_gitlab_repo_name(project)
-            if repo_name is None:
-                fg_print.error(f"Could not extract repository name for project {project.name} with path {project.path_with_namespace}, skipping import!")
-                continue
-            clone_url = self._build_gitlab_repo_url(owner_name, repo_name)
-            
-            is_private = (project.visibility == "private" or project.visibility == "internal")
-            auth_password=self.gitlab_config.GITLAB_ADMIN_PASS
-            auth_username=self.gitlab_config.GITLAB_ADMIN_USER
-            auth_token=self.gitlab_config.GITLAB_TOKEN
+                repo_name = self._get_gitlab_repo_name(project)
+                if repo_name is None:
+                    fg_print.error(f"Could not extract repository name for project {project.name} with path {project.path_with_namespace}, skipping import!")
+                    continue
+                clone_url = self._build_gitlab_repo_url(owner_name, repo_name)
+                
+                is_private = (project.visibility == "private" or project.visibility == "internal")
+                auth_password=self.gitlab_config.GITLAB_ADMIN_PASS
+                auth_username=self.gitlab_config.GITLAB_ADMIN_USER
+                auth_token=self.gitlab_config.GITLAB_TOKEN
 
-            fg_print.debug(f"{project.path} : {project.name}")
-            repo = CanonicalRepo(source_system=self.source_system, source_id=project.get_id(),
-                                 is_individual=is_individual, username=project.path, name=project.name,
-                                 owner_name=owner_name, clone_url=clone_url, 
-                                 is_private=is_private,description=project.description,
-                                 auth_username=auth_username,auth_password=auth_password,auth_token=auth_token,
-                                 source_type="Project")
-            repos.append(repo)
-            seen_repos_map[repo.source_id] = repo.name
-            
+                fg_print.debug(f"{project.path} : {project.name}")
+                repo = CanonicalRepo(source_system=self.source_system, source_id=project.get_id(),
+                                    is_individual=is_individual, username=project.path, name=project.name,
+                                    owner_name=owner_name, clone_url=clone_url, 
+                                    is_private=is_private,description=project.description,
+                                    auth_username=auth_username,auth_password=auth_password,auth_token=auth_token,
+                                    source_type="Project")
+                repos.append(repo)
+                seen_repos_map[repo.source_id] = repo.name
+        except IterativeFetchError:
+            fg_print.error(f"Failed to load all Projects. Import will need to be run again for Repositories")
         return repos
     
 
@@ -224,30 +365,37 @@ class GitLabMigrationSource(MigrationSource):
             return f"git@{self.gitlab_config.GITLAB_URL.replace('https://', '').replace('http://', '')}:{owner}/{repo}.git"
         else:
             return f"{self.gitlab_config.GITLAB_URL}/{owner}/{repo}.git"
-        
+    
 
 
     def _list_repository_accessors_inherited(self, project: gitlab.v4.objects.Project) -> list[CanonicalRepoAccessor]:
         """List all those repository accessors that are inherited from a group in the hierarchy to which the project belongs"""
 
         repo_accessors_members : list[CanonicalRepoAccessor] = []
-        ancestor_groups = project.groups.list(get_all=True)
-        group_ids = [anc.get_id() for anc in ancestor_groups]
-        for group_id in group_ids:
-            fg_print.debug(f"Loading inherited users from owner group {group_id}")
-            group: gitlab.v4.objects.Group = self.gitlab_api.groups.get(id=group_id)
-            # Group members are users. They share a finite set of access_level
-            # we can map that access level to a team.
-            groupMembers: list[gitlab.v4.objects.GroupMember] = group.members.list(get_all=True)
-            # For every user that has access to this group
-            for group_member in groupMembers:
-                if self._is_ignore_gitlab_user(group_member.username):
-                    if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
-                        fg_print.warning(f"Ignored a GitLab specific system user {group_member.username}. If this is incorrect, rerun import permitting system user cloning")
-                        continue
-                    else:
-                        fg_print.warning(f"Likely a GitLab specific system user {group_member.username}. Can possibly be deleted after import!")
-                repo_accessors_members.append(CanonicalRepoAccessor(username = group_member.username, access_level= group_member.access_level))
+        # ancestor_groups = project.groups.list(get_all=True)
+        # group_ids = [anc.get_id() for anc in self._iter_all_groups_of_project(project)]
+        try:
+            for group in self._iter_all_groups_of_project(project):
+                group_id = group.get_id()
+                fg_print.debug(f"Loading inherited users from owner group {group_id}")
+                # group: gitlab.v4.objects.Group = self.gitlab_api.groups.get(id=group_id)
+                # Group members are users. They share a finite set of access_level
+                # we can map that access level to a team.
+                # groupMembers: list[gitlab.v4.objects.GroupMember] = group.members.list(get_all=True)
+                # For every user that has access to this group
+                try:
+                    for group_member in self._iter_all_members_of_group(group=group):
+                        if self._is_ignore_gitlab_user(group_member.username):
+                            if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
+                                fg_print.warning(f"Ignored a GitLab specific system user {group_member.username}. If this is incorrect, rerun import permitting system user cloning")
+                                continue
+                            else:
+                                fg_print.warning(f"Likely a GitLab specific system user {group_member.username}. Can possibly be deleted after import!")
+                        repo_accessors_members.append(CanonicalRepoAccessor(username = group_member.username, access_level= group_member.access_level))
+                except IterativeFetchError:
+                    fg_print.error(f"Failed to load all Group Members for Group {group.path}. Import will need to be run again for Repository Accessors")
+        except IterativeFetchError:
+            fg_print.error(f"Failed to load all Groups for Project {project.path}. Import will need to be run again for Repository Accessors")
         return repo_accessors_members
     
 
@@ -256,19 +404,21 @@ class GitLabMigrationSource(MigrationSource):
         """List all those repository accessors that are directly added to this project"""
         repo_accessors_members : list[CanonicalRepoAccessor] = []
 
-        project_members: list[gitlab.v4.objects.ProjectMember] = project.members.list(get_all=True)
+        # project_members: list[gitlab.v4.objects.ProjectMember] = project.members.list(get_all=True)
         project_member : gitlab.v4.objects.ProjectMember
         
-        for project_member in project_members:
-            if self._is_ignore_gitlab_user(project_member.username):
-                if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
-                    fg_print.warning(f"Ignored a GitLab specific system user {project_member.username}. If this is incorrect, rerun import permitting system user cloning")
-                    continue
-                else:
-                    fg_print.warning(f"Likely a GitLab specific system user {project_member.username}. Can possibly be deleted after import!")
-            fg_print.debug(f"Added accessor {project_member.username} for project {project.path}")
-            repo_accessors_members.append(CanonicalRepoAccessor(username = project_member.username, access_level= project_member.access_level))
-        
+        try:
+            for project_member in self._iter_all_members_of_project(project=project):
+                if self._is_ignore_gitlab_user(project_member.username):
+                    if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
+                        fg_print.warning(f"Ignored a GitLab specific system user {project_member.username}. If this is incorrect, rerun import permitting system user cloning")
+                        continue
+                    else:
+                        fg_print.warning(f"Likely a GitLab specific system user {project_member.username}. Can possibly be deleted after import!")
+                fg_print.debug(f"Added accessor {project_member.username} for project {project.path}")
+                repo_accessors_members.append(CanonicalRepoAccessor(username = project_member.username, access_level= project_member.access_level))
+        except IterativeFetchError:
+            fg_print.error(f"Failed to load all Project Members for Project {project.path}. Import will need to be run again for Repository Accessors")
         return repo_accessors_members
 
 
@@ -294,54 +444,62 @@ class GitLabMigrationSource(MigrationSource):
     @override
     def list_organizations(self) -> CanonicalOrganizations:
         # read all users
-        groups: list[gitlab.v4.objects.Group] = self.gitlab_api.groups.list(get_all=True)
+        # groups: list[gitlab.v4.objects.Group] = self.gitlab_api.groups.list(get_all=True)
         
         organizations = CanonicalOrganizations(source_type="Groups", members=[])
 
         group : gitlab.v4.objects.Group
 
         # Each group is essentially mapping as repository (or series of) owner (Forgejo organization)
-        for group in groups:
-            # create a map only to avoid searching for the right team for each user
-            #TODO currently though we have a list of Teams for each org, we simply
-            #     add users to the first matching team in the access level. If actually there are multiple
-            #     users with same access level in a group, but not all sharing access to same repository,
-            #     we'll need to create multiple teams, depending on repository access (which might get complicated quickly)
-            access_role_teams_map: dict[int,list[CanonicalTeam]] = {}
-            
-            # Group members are users. They share a finite set of access_level
-            # we can map that access level to a team.
-            groupMembers: list[gitlab.v4.objects.GroupMember] = group.members.list(get_all=True)
-            
-            # For every user that has access to this group
-            for member in groupMembers:
-                if self._is_ignore_gitlab_user(member.username):
-                    if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
-                        fg_print.warning(f"Ignored a GitLab specific system user {member.username}. If this is incorrect, rerun import permitting system user cloning")
-                        continue
-                    else:
-                        fg_print.warning(f"Likely a GitLab specific system user {member.username}. Can possibly be deleted after import!")
-
-                # get the correct team
-                team = self._find_or_create_team(access_level_teams_map=access_role_teams_map, access_level=member.access_level)
+        try:
+            for group in self._iter_all_groups():
+                # create a map only to avoid searching for the right team for each user
+                #TODO currently though we have a list of Teams for each org, we simply
+                #     add users to the first matching team in the access level. If actually there are multiple
+                #     users with same access level in a group, but not all sharing access to same repository,
+                #     we'll need to create multiple teams, depending on repository access (which might get complicated quickly)
+                access_role_teams_map: dict[int,list[CanonicalTeam]] = {}
                 
-                # add the user to the team
-                team.users.append(CanonicalUser(username=member.username))
+                # Group members are users. They share a finite set of access_level
+                # we can map that access level to a team.
+                # groupMembers: list[gitlab.v4.objects.GroupMember] = group.members.list(get_all=True)
+                
+                # For every user that has access to this group
+                try:
+                    for member in self._iter_all_members_of_group(group=group):
+                        if self._is_ignore_gitlab_user(member.username):
+                            if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
+                                fg_print.warning(f"Ignored a GitLab specific system user {member.username}. If this is incorrect, rerun import permitting system user cloning")
+                                continue
+                            else:
+                                fg_print.warning(f"Likely a GitLab specific system user {member.username}. Can possibly be deleted after import!")
 
-            # create an organization
-            #We use the gitlab api Group path because it matches that used in the creation of CanonicalRepo (which is essential to link the two together during import)
-            # We clean this up before using it in forgejo as a quasi identifier, so in theory we could use .name instead, but we'd need to to update how we load CanonicalRepo too.
-            fg_print.debug(f"name={group.name} path={group.path} fullname={group.full_name}")
-            this_org = CanonicalOrganization(source_type="Group", username=group.path, full_name=group.full_name, 
-                                             description=group.description, teams=[
-                                                                                    team
-                                                                                    for team_list in access_role_teams_map.values()
-                                                                                    for team in team_list
-                                                                                ],) # Note have to flatten the list of teams per access_level here.
-            # add the org to the list
-            organizations.members.append(this_org)
-            if this_org.username is None:
-                os.sys.exit(1)
+                        # get the correct team
+                        team = self._find_or_create_team(access_level_teams_map=access_role_teams_map, access_level=member.access_level)
+                        
+                        # add the user to the team
+                        team.users.append(CanonicalUser(username=member.username))
+
+                    # create an organization
+                    #We use the gitlab api Group path because it matches that used in the creation of CanonicalRepo (which is essential to link the two together during import)
+                    # We clean this up before using it in forgejo as a quasi identifier, so in theory we could use .name instead, but we'd need to to update how we load CanonicalRepo too.
+                    fg_print.debug(f"name={group.name} path={group.path} fullname={group.full_name}")
+                    this_org = CanonicalOrganization(source_type="Group", username=group.path, full_name=group.full_name, 
+                                                    description=group.description, teams=[
+                                                                                            team
+                                                                                            for team_list in access_role_teams_map.values()
+                                                                                            for team in team_list
+                                                                                        ],) # Note have to flatten the list of teams per access_level here.
+                    # add the org to the list
+                    organizations.members.append(this_org)
+                    if this_org.username is None:
+                        os.sys.exit(1)
+                except IterativeFetchError:
+                    fg_print.error(f"Failed to load members for {self.source_system} Group {group.path}, import will need to be run again for Organizations and Teams.")
+                    # continue with next group.
+                    continue
+        except IterativeFetchError:
+            fg_print.error(f"Failed to load all Groups, import will need to be run again for Organizations and Teams.")
         return organizations
 
 
@@ -362,39 +520,46 @@ class GitLabMigrationSource(MigrationSource):
 
     @override
     def list_system_users(self) -> list[CanonicalSystemUser]:
-        users: list[gitlab.v4.objects.User] = self.gitlab_api.users.list(get_all=True)
+        # users: list[gitlab.v4.objects.User] = self.gitlab_api.users.list(get_all=True)
         canonical_users : list[CanonicalSystemUser] = []
-        for user in users:
-            if self._is_ignore_gitlab_user(user.username):
-                if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
-                    fg_print.warning(f"Ignored a GitLab specific system user {user.username}. If this is incorrect, rerun import permitting system user cloning")
+        try:
+            for user in self._iter_all_users():
+                if self._is_ignore_gitlab_user(user.username):
+                    if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
+                        fg_print.warning(f"Ignored a GitLab specific system user {user.username}. If this is incorrect, rerun import permitting system user cloning")
+                        continue
+                    else:
+                        fg_print.warning(f"Likely a GitLab specific system user {user.username}. Can possibly be deleted after import!")
+
+                # gpg_keys : list[gitlab.v4.objects.UserGPGKey] = user.gpgkeys.list(get_all=True)
+                # keys: list[gitlab.v4.objects.UserKey] = user.keys.list(get_all=True)
+
+                avatar_url : str | None
+                try:
+                    avatar_url = user.avatar_url
+                except AttributeError:
+                    avatar_url = None
+            
+                emailAddress : str = self._build_or_extract_email(user)
+                try:
+                    canonical_keys = [CanonicalKey(name=key.title, key=key.key) for key in self._iter_all_public_keys_of_user(user)]
+                    canonical_gpg_keys : list[CanonicalGpgKey] = []
+                    for gpg_key in self._iter_all_gpg_keys_of_user(user):
+                        key_id = getattr(gpg_key, "key_id", None)
+                        
+                        key_content = (getattr(gpg_key, "public_key", None) 
+                                    or getattr(gpg_key, "key", None))
+                        canonical_gpg_keys.append(CanonicalGpgKey(name=key_id, armored_public_key=key_content, armored_signature=None))
+                except IterativeFetchError:
+                    fg_print.error(f"Failed to load keys for User, User will not be imported and import will need to be run again for Users.")
                     continue
-                else:
-                    fg_print.warning(f"Likely a GitLab specific system user {user.username}. Can possibly be deleted after import!")
+                    
+                canonical_users.append(CanonicalSystemUser(gpg_keys=canonical_gpg_keys,keys=canonical_keys,
+                                                        email=emailAddress, full_name=user.name,
+                                                        username=user.username, source_system=self.source_system, avatar_url=avatar_url))
+        except IterativeFetchError:
+            fg_print.error(f"Failed to load all Users, import will need to be run again for Users.")
 
-
-            gpg_keys : list[gitlab.v4.objects.UserGPGKey] = user.gpgkeys.list(get_all=True)
-            keys: list[gitlab.v4.objects.UserKey] = user.keys.list(get_all=True)
-
-            avatar_url : str | None
-            try:
-                avatar_url = user.avatar_url
-            except AttributeError:
-                avatar_url = None
-        
-            emailAddress : str = self._build_or_extract_email(user)
-            canonical_keys = [CanonicalKey(name=key.title, key=key.key) for key in keys]
-            canonical_gpg_keys : list[CanonicalGpgKey] = []
-            for gpg_key in gpg_keys:
-                key_id = getattr(gpg_key, "key_id", None)
-                
-                key_content = (getattr(gpg_key, "public_key", None) 
-                            or getattr(gpg_key, "key", None))
-                canonical_gpg_keys.append(CanonicalGpgKey(name=key_id, armored_public_key=key_content, armored_signature=None))
-                
-            canonical_users.append(CanonicalSystemUser(gpg_keys=canonical_gpg_keys,keys=canonical_keys,
-                                                       email=emailAddress, full_name=user.name,
-                                                       username=user.username, source_system=self.source_system, avatar_url))
         return canonical_users
 
     
@@ -423,8 +588,9 @@ class GitLabMigrationSource(MigrationSource):
         access_level_int = int(source_access_level)
         known_access_levels = sorted(self.access_level_role_map.keys())
         closest_access_level: int | None = None
-        #TODO this isn't very good, we could check the Forgejo roles to see if there are any custom ones
-        #     that we could map to instead of just looking at the predefined ones in the gitlab role mapping, but this is a start.
+        
+        # Because we cache the custom roles created, the nearest role may be one we've already custom created
+        
         if(allow_upgrade):
             larger = min((x for x in known_access_levels if x > access_level_int), default=None)
             if not larger is None:
@@ -432,7 +598,8 @@ class GitLabMigrationSource(MigrationSource):
         if(allow_downgrade):
             smaller = max((x for x in known_access_levels if x < access_level_int), default=None)
             if not smaller is None:
-                closest_access_level = smaller
+                if closest_access_level is None or abs(closest_access_level - access_level_int) > abs(smaller - access_level_int):
+                    closest_access_level = smaller
 
         if closest_access_level is None:
             return None

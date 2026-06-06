@@ -14,7 +14,7 @@ class MigrationSource(ABC):
         pass
 
     @abstractmethod
-    def listRepos(self) -> list[CanonicalRepo]:
+    def list_repositories(self) -> list[CanonicalRepo]:
         """Build and return a full list of repositories extracted"""
         pass
 

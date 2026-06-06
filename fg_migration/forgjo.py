@@ -3,6 +3,8 @@ from copy import deepcopy
 import os
 import random
 import string
+import time
+from typing import Iterator
 from pyforgejo.core import RequestOptions
 from typing_extensions import deprecated
 
@@ -18,7 +20,7 @@ import yaml
 from fg_migration import fg_print
 from fg_migration.canonical_types import CanonicalOrganization, CanonicalRepo, CanonicalRepoOwner, CanonicalSystemUser, CanonicalTeam
 from fg_migration.config_types import ForgejoConfig
-from fg_migration.forgeo_types import ForgejoRepositoryRole, ForgejoRolePermissionDefinition, ForgejoTeamDefinition, ForgejoTeamRoleBuilder, ForgejoTeamRoleMapper
+from fg_migration.forgeo_types import ApiPaginator, ForgejoRepositoryRole, ForgejoRolePermissionDefinition, ForgejoTeamDefinition, ForgejoTeamRoleBuilder, ForgejoTeamRoleMapper, IterativeFetchError
 
 
 class ForgejoDestination:
@@ -42,17 +44,7 @@ class ForgejoDestination:
     
     def get_default_team_definitions(self) -> list[ForgejoTeamDefinition]:
         return self.default_team_definitions.values()
-
-    def _get_forgejo_labels(self, owner: str, repo: str) -> list[Label]:
-        """get labels for a repository"""
-        
-        try:
-            existing_labels = self.fg_api.issue.list_labels(owner, repo)
-            return existing_labels
-        except Exception as e:
-            detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to retrieve existing labels for project {repo}! {detail}")
-            return []
+    
 
     
     def load_roles(self, path: str) -> tuple[dict[ForgejoRepositoryRole,ForgejoRolePermissionDefinition],
@@ -91,115 +83,167 @@ class ForgejoDestination:
 
         return role_definitions, team_definitions
 
+
+
+    def iter_forgejo_labels(self, owner: str, repo: str) -> Iterator[Label]:
+        """an iterator over all labels for a repository"""
+
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Labels",retrieval_detail=f" for project {repo}!")
+        return paginator.iterate(fetch_page_from_api=
+            lambda fg_api, page, limit: fg_api.issue.list_labels(
+                owner=owner,
+                repo=repo,
+                page=page,
+                limit=limit,
+            )
+        )
+
     
 
-    def get_forgejo_milestones(self, owner: str, repo: str) -> list[Milestone]:
+    def iter_forgejo_milestones(self, owner: str, repo: str) -> Iterator[Milestone]:
         """get milestones for a repository"""
 
-        try:
-            existing_milestones : list[Milestone] = self.fg_api.issue.get_milestones_list(owner, repo)
-            return existing_milestones
-        except Exception as e:
-            detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to retrieve existing milestones for project {repo}! {detail}")
-            return []
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Milestones",retrieval_detail=f" for project {repo}!")
+        return paginator.iterate(fetch_page_from_api=
+            lambda fg_api, page, limit: fg_api.issue.get_milestones_list(
+                owner=owner,
+                repo=repo,
+                page=page,
+                limit=limit,
+            )
+        )
 
 
 
-    def get_forgejo_issues(self, owner: str, repo: str) -> list[Issue]:
+    def iter_forgejo_issues(self, owner: str, repo: str) -> Iterator[Issue]:
         """get issues for a repository"""
 
-        try:
-            existing_issues = self.fg_api.issue.list_issues(owner, repo)
-            return existing_issues
-        except Exception as e:
-            detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to retrieve existing issues for project {repo}! {detail}")
-            return []
-
-
-
-    @deprecated("probably delete this")
-    def is_owner_group(self, team:CanonicalTeam) -> bool:
-         return team.source_access_level == self.forgejo_config.FORGEJO_DEFAULT_OWNERS_TEAM_NAME
-
-
-
-    @deprecated("probably delete this")
-    def get_desired_owners_team_name(self) -> str:
-        #TODO this is dangerous now we allow users to define their own role IDs in the yaml file.
-        return self.team_definitions[ForgejoRepositoryRole("OWNER")].name
-
-
-
-    @deprecated("Need to find some way of snagging users trying to change the Owners team name. Likely call this in function to rename team out of the way")
-    def get_default_owners_team_name(self) -> str:
-        return self.forgejo_config.FORGEJO_DEFAULT_OWNERS_TEAM_NAME
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Issues",retrieval_detail=f" for project {repo}!")
+        return paginator.iterate(fetch_page_from_api=
+            lambda fg_api, page, limit: fg_api.issue.list_issues(
+                owner=owner,
+                repo=repo,
+                page=page,
+                limit=limit,
+            )
+        )
        
 
 
-    def get_forgejo_teams(self, org_name: str) -> list[Team]:
+    def iter_forgejo_teams(self, org_name: str) -> Iterator[Team]:
         """get teams for an organization"""
 
-        try:
-            existing_teams = self.fg_api.organization.org_list_teams(org_name)
-            return existing_teams
-        except Exception as e:
-            detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to retrieve existing teams for organization {org_name}! {detail}")
-            return []
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Teams",retrieval_detail=f" for organization {org_name}!")
+        return paginator.iterate(fetch_page_from_api=
+            lambda fg_api, page, limit: fg_api.organization.org_list_teams(
+                org=org_name,
+                page=page,
+                limit=limit,
+            )
+        )
         
 
-
-    def get_forgejo_team_members(self, team: Team) -> list[User]:
+    #FIXME currently retrieve these 3 times in the migrator, 2x while importing teams (may be reducable to 1x with some thought)!!!!
+    def iter_forgejo_team_members(self, team: Team) -> Iterator[User]:
         """get members for a team"""
 
-        try:
-            members = self.fg_api.organization.org_list_team_members(id=team.id)
-            return members
-        except Exception as e:
-            detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to retrieve team members for team {team.name} {detail}")
-            return []
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Team Members",retrieval_detail=f" for Team {team.name}!")
+        return paginator.iterate(fetch_page_from_api=
+            lambda fg_api, page, limit: fg_api.organization.org_list_team_members(
+                id=team.id,
+                page=page,
+                limit=limit,
+            )
+        )
 
 
 
-    def get_forgejo_collaborators(self, owner_username: str, repo: str) -> list[User]:
+    def iter_forgejo_collaborators(self, owner_username: str, repo: str) -> Iterator[User]:
         """get collaborators for a repository"""
 
-        try:
-            collaborators = self.fg_api.repository.repo_list_collaborators(owner_username, repo)
-            return collaborators
-        except Exception as e:
-            detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to retrieve collaborators for repo {repo} {detail}")
-            return []
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Collaborators",retrieval_detail=f" for repo {repo}!")
+        return paginator.iterate(fetch_page_from_api=
+            lambda fg_api, page, limit: fg_api.repository.repo_list_collaborators(
+                owner=owner_username,
+                repo=repo,
+                page=page,
+                limit=limit,
+            )
+        )
 
 
 
-    def get_forgejo_user_keys(self, username : str) -> list[PublicKey] :
+    def iter_forgejo_user_keys(self, username : str) -> Iterator[PublicKey] :
         """get public keys for a user"""
 
-        try:
-            keys = self.fg_api.user.list_keys(username)
-            return keys
-        except Exception as e:
-            detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to retrieve public keys for user {username}! {detail}")
-        return []
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Public Keys",retrieval_detail=f" for user {username}!")
+        return paginator.iterate(fetch_page_from_api=
+            lambda fg_api, page, limit: fg_api.user.list_keys(
+                username=username,
+                page=page,
+                limit=limit,
+            )
+        )
+    
 
-    def get_forgejo_user_gpg_keys(self, username : str) -> list[GpgKey] :
+
+    def iter_forgejo_user_gpg_keys(self, username : str) -> Iterator[GpgKey] :
         """get gpg keys for a user"""
 
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="GPG Keys",retrieval_detail=f" for user {username}!")
+        return paginator.iterate(fetch_page_from_api=
+            lambda fg_api, page, limit: fg_api.user.user_list_gpg_keys(
+                username=username,
+                page=page,
+                limit=limit,
+            )
+        )
+    
+
+
+    def iter_forgejo_teams_in_repository(self,
+                                        owner_username:str,
+                                        repo_name:str) -> Iterator[Team]:
+        """List all teams in a repository"""
+
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Teams",retrieval_detail=f" in Repository {repo_name}!")
+        return paginator.iterate(fetch_page_from_api=
+            lambda fg_api, page, limit: fg_api.repository.repo_list_teams(
+                owner=owner_username,
+                repo=repo_name,
+                # Currently no pagination support for this call.
+                # page=page,
+                # limit=limit,
+            )
+        )
+
+
+
+    def iter_forgejo_organizations(self) -> Iterator[Organization]:
+        """list all organizations in Forgejo"""
+
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Organizations",retrieval_detail=f" in Forgejo!")
+        return paginator.iterate(fetch_page_from_api=
+            lambda fg_api, page, limit: fg_api.organization.org_get_all(
+                page=page,
+                limit=limit,
+            )
+        )
+
+
+
+    def get_forgejo_organization(self, org: CanonicalOrganization, org_name: str) -> Organization|None:
+        
         try:
-            keys = self.fg_api.user.user_list_gpg_keys(username)
-            return keys
+            #fg_print.debug(f"Trying to load forgejo organization {possible_org} for gitlab project {project.name}...")
+            org = self.fg_api.organization.org_get(org_name)
+            fg_print.debug(f"Loaded organization {org.full_name} for {org.source_system} {org.source_type} {org.name}!")
+            return org
         except Exception as e:
             detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to retrieve gpg keys for user {username}! {detail}")
-            
-        return []
-
+            fg_print.error(f"Failed to retrieve forgejo organization {org_name} for repo {org.get_safe_username()} using {org.source_system} {org.source_type} {org.name}! {detail}")
+        return None
+    
 
 
     def get_forgejo_organization(self, repo: CanonicalRepo, org_name: str) -> Organization:
@@ -244,82 +288,6 @@ class ForgejoDestination:
 
 
 
-    def list_forgejo_organizations(self) -> list[Organization]:
-        """list all organizations in Forgejo"""
-        try:
-            orgs = self.fg_api.organization.org_get_all()
-            fg_print.debug(f"Loaded {len(orgs)} organizations from Forgejo!")
-            return orgs
-        except Exception as e:
-            detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to list organizations in Forgejo! {detail}")
-            return []
-
-
-
-    @deprecated("working, but Not used")
-    def forgejo_organization_exists(self, orgname: str) -> bool:
-        """check if an organization exists"""
-        try:
-            org = self.fg_api.organization.org_get(orgname)
-            fg_print.warning(f"Organization {orgname} already exists in Forgejo, skipping!")
-            return True
-        except NotFoundError:
-            return False
-        except Exception as e:
-            fg_print.info(f"Organization {orgname} not found in Forgejo, importing!")
-            return False
-
-
-    @deprecated("working, but Not used")
-    def forgejo_team_member_exists(self, username: str, team: Team) -> bool:
-        """check if a member exists in a team"""
-        existing_members = self.get_forgejo_team_members(team=team)
-        if existing_members:
-            
-            existing_member = next(
-                (item for item in existing_members if item.username == username), None
-            )
-
-            if existing_member:
-                fg_print.warning(
-                    f"Member {username} is already in team {team.name}, skipping!"
-                )
-                return True
-
-            fg_print.info(f"Member {username} is not in team {team.name}, importing!")
-            return False
-
-        fg_print.info(f"No members in team {team.name}, importing!")
-        return False
-
-
-    @deprecated("working, but Not used")
-    def forgejo_collaborator_exists(self, _owner: str, repo: str, username: str) -> bool:
-        """check if a collaborator exists in a repository"""
-        try:
-            collaborators : list[User] = self.fg_api.repository.repo_list_collaborators(_owner, repo)
-            existing = next(
-                (c for c in collaborators if c.username == username),
-                None,
-            )
-            if existing:
-                fg_print.warning(
-                    f"Collaborator {username} already exists in Forgejo, skipping!"
-                )
-                return True
-            else:
-                fg_print.info(f"Collaborator {username} not found in Forgejo, importing!")
-                return False
-        except NotFoundError:
-            return False
-        except Exception as e:
-            detail = self._get_exception_detail(e)
-            fg_print.error(f"Failed to list collaborators for project {repo} for owner {_owner} {detail}!")
-            return False
-
-
-
     def forgejo_repo_exists(self, owner_username: str, repo: CanonicalRepo) -> bool:
         """check if a repository exists"""
         try:
@@ -342,6 +310,7 @@ class ForgejoDestination:
 
 
 
+    @deprecated("Not currently used")
     def forgejo_label_exists(self, owner: str, repo: str, labelname: str) -> bool:
         """check if a label exists in a repository"""
         #issues = self.fg_api.issue.list_issues(owner, repo)
@@ -365,6 +334,7 @@ class ForgejoDestination:
 
 
 
+    @deprecated("Not currently used")
     def forgejo_issue_exists(self, existing_issues : list[Issue], repo: str, issue_title: str) -> bool:
         """check if an issue exists in a repository"""
         
@@ -387,6 +357,7 @@ class ForgejoDestination:
 
 
 
+    @deprecated("Not currently used")
     def find_forgejo_milestone_id_by_title(self, forgejo_milestones: list[Milestone], title: str) -> int:
         """get milestone id by title"""
         # get the forgejo milestone with matching title
@@ -406,6 +377,7 @@ class ForgejoDestination:
 
 
 
+    @deprecated("Not currently used")
     def find_forgejo_milestone_by_title(self, existing_milestones : list[Milestone], title: str) -> bool:
         """check if a milestone exists in a repository"""
         
@@ -507,19 +479,6 @@ class ForgejoDestination:
                 return False
         return True
 
-
-    def forgejo_list_team_in_repository(self,
-                                        owner_username:str,
-                                        repo_name:str) -> list[Team]:
-        """List all teams in a repository"""
-        try:
-            return self.fg_api.repository.repo_list_teams(owner=owner_username,repo=repo_name)
-        except Exception as e:
-            detail = self._get_exception_detail(e)
-            fg_print.error(
-                f"Listing teams in Repository {repo_name} Failed: {detail}"
-            )
-            return []
 
 
     def forgejo_add_team_to_repository(self,
@@ -669,8 +628,6 @@ class ForgejoDestination:
 
     def forgejo_add_organization(self, organization: CanonicalOrganization, existing_forgejo_org:Organization|None) -> bool:
         """add a group as organization in Forgejo"""
-        # need this pre-existance check because status 422 returned for conflict, not 409 
-        #if not self.forgejo_organization_exists(orgname=organization.get_safe_username()):
         if existing_forgejo_org is None:
             try:
                 self.fg_api.organization.org_create(

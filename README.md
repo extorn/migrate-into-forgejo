@@ -4,29 +4,31 @@
 
 # **WARNING:**
 
-**This is under active development (30/05/2026)**,
+**This is under active development (06/06/2026)**,
 
 Ping me an email if you're interested in this code.
 
-Notes
-
-1.  All gitlab list calls currently retrieve all items available, but Forgejo ones do not, and paging isn't yet supported so large numbers of items may not all import correctly when merging into an existing Forgejo instance.
-
 ## Preamble
 
-This script uses the GitLab API and a combination of [pyforgejo](https://codeberg.org/harabat/pyforgejo) and python `requests` to migrate all data from GitLab to Forgejo.
+This script uses the GitLab API and a combination of [pyforgejo](https://codeberg.org/harabat/pyforgejo) and python `requests` (where necessary) to migrate all data from GitLab to Forgejo.
 
-This script supports migration of:
+This script currently supports GitLab migration of:
 
-Repositories & Wiki (?fork status is lost? - is this the case? this is part of the internal Forgejo migration)
+Repositories
 
-Users (including Avatars for any **NEWLY** created users)
+*   Code, Issues, Labels, Milestones, Pull requests, Releases, Mirror & Wiki (this is part of the internal Forgejo migration)
+*   All Accessors (i.e. users) - assigned to Teams and given access to match your mapping specification
+
+Users
+
+*   Public SSH keys, PGP Keys
+*   Avatars for any **NEWLY** (because it requires the script to login as that user to upload the avatar) created users
+*   _all users will have a temporary password assigned and need to change it on first use_
 
 Groups
 
-Public SSH keys, PGP Keys
-
-It supports creation of repository Teams and collaborators with roles defined to your configured specification, mapping Gitlab users with any given source access level to those roles as you decide
+*   Both organisational Groups and team Groups as Forgejo Organizations and Forgejo Teams respectively.
+*   Roles are defined according to your configured specification, mapping Gitlab users with any given source access level to those roles as you decide
 
 Tested with GitLab Version 18.11 and Forgejo Version 15.0.2
 
@@ -168,7 +170,7 @@ gitlab_admin_pass = <your-gitlab-password>
 
 ### Credits and fork information
 
-This is a fork of https://github.com/GEANT/gitlab-to-forgejo.
+This is a fork of [https://github.com/GEANT/gitlab-to-forgejo,](https://github.com/GEANT/gitlab-to-forgejo,) but the changes are now so substantial that it isn't mergeable upstream as a 'patch' any more.
 
 Changes:
 
@@ -186,5 +188,3 @@ Note:
 
 *   I have added warnings where users are found that I think are likely to be gitlab system users. They are imported anyway by default, but you're made aware. You can choose to filter out gitlab system users from the migration.
 *   I have not yet re-added support for custom import of labels, milestones since this is handled inside the core Forgejo migration of a repository.
-
-The parent was a fork of [gitlab\_to\_gitea](https://git.autonomic.zone/kawaiipunk/gitlab-to-gitea.git), with less features (this script does not import issues, milestones and labels)
