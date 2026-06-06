@@ -3,7 +3,6 @@ from copy import deepcopy
 import os
 import random
 import string
-import time
 from typing import Iterator
 from pyforgejo.core import RequestOptions
 from typing_extensions import deprecated
