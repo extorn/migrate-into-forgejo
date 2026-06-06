@@ -6,16 +6,25 @@
 
 | **File** | **Purpose** | **Notes** |
 | --- | --- | --- |
-| canonical\_types.py | A set of classes which act as a bridge between the source systems and Forgejo types. | The key idea is that it is a lot easier mentally to see what is going on if you know a type is canonical it has come from the source system, if it is e.g. a Team, or User, it has come from Forgejo. These classes could equally have been called Import\[ed\]\<XYZ> or similar. |
-| config\_types.py | Immutable Data classes that configuration files are loaded into, these types are passed around the rest of the code | These are loaded with data from the .migrate.ini file sections |
-| fg\_print.py | A wrapper around logging inherited from the original forked code | I'm not clear on the benefits of this, but not being a native python developer, I've left it as is for now |
-| fg\_purger.py | A class that contains all code used to purge Forgejo | This code was extracted from the orginal forked code in purge\_forgejo.py. It has been updated to use the pyforge API, but not been tested |
+| **ADAPTERS** |   |   |
 | forgejo\_types.py | A few useful utility classes used by the ForgejoDestination class | Extracted primarily to try and reduce the volume of code in forgejo.py |
 | forgejo.py | A class that wraps the pyforge API, Canonical Types are passed in to many of the functions | The key idea for this was to extract a lot of print statements from the migration logic to make that more readable, but it's become more useful over time. Now it contains a class ForgejoDestination, that the migrator uses. |
 | gitlab.py | An implementation (the only so far) of the class MigrationSource | This class extracts data from gitlab into Canonical classes which are then loaded into Forgejo by the migration code. This class is driven by the migrator |
+| **CORE** |   |   |
+| canonical\_types.py | A set of classes which act as a bridge between the source systems and Forgejo types. | The key idea is that it is a lot easier mentally to see what is going on if you know a type is canonical it has come from the source system, if it is e.g. a Team, or User, it has come from Forgejo. These classes could equally have been called Import\[ed\]\<XYZ> or similar. |
+| config\_types.py | Immutable Data classes that configuration files are loaded into, these types are passed around the rest of the code | These are loaded with data from the .migrate.ini file sections |
 | migration\_source\_type.py | An abstract class that defines the interface for ANY source system to be imported into Forgejo | There is no support for paging API calls at present, that's the next consideration now the migration code essentially works, though of less urgency as most users are presumed to be either own small repositories for personal use or have funds to write such a script for themselves for their custom commercial use. |
+| **SERVICES** |   |   |
+| fg\_purger.py | A class that contains all code used to purge Forgejo | This code was extracted from the orginal forked code in purge\_forgejo.py. It has been updated to use the pyforge API, but not been tested |
 | migrator.py | The actual migration engine itself | Extracts canonical types from the migration source provided and loads them into the destination provided - currently only Forgejo is supported as a destination with no effort made to make this configurable, though it wouldn't be too complicated now, the interface would be much broader than the MigrationSource ones |
 | push\_mirror\_creator.py | A class that contains all code used manage push mirrors to/from Forgejo | This code was extracted from the orginal forked code in purge\_forgejo.py. It has been updated to use the pyforge API, but not been tested |
+| **STRATEGIES** |   |   |
+| access\_level\_strategy.py |   | see class comment |
+| access\_mapping\_strategy.py | Interface class | implemented to define how users andd collaborations are mapped into the repositories, organizations, etc |
+| direct\_collaborator\_strategy.py |   | see class comment |
+| strict\_mirror\_strategy.py |   | see class comment |
+| **UTILS** |   |   |
+| fg\_print.py | A wrapper around logging inherited from the original forked code | I'm not clear on the benefits of this, but not being a native python developer, I've left it as is for now |
 | utils.py | A place for a series of functions used in various places | A temporary dumping ground, but the aim is to keep this as small as possible |
 
 ### Scripts
