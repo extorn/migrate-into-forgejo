@@ -82,8 +82,8 @@ class StrictAccessLevelMappingStrategy(AccessLevelAccessMappingStrategy):
         - Never performs fuzzy role mapping.
         - Never performs fuzzy team mapping.
         - Reports mapping violations instead of falling back, note:
-          * Users not representable through team mappings are reported as strict access
-        violations and are not imported, but the remaining migration succeeds
+            * Users not representable through team mappings are reported as strict access
+              violations and are not imported, but the remaining migration succeeds
         """
 
     @override

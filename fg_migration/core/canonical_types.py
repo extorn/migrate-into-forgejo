@@ -9,6 +9,7 @@
           These types have fields such as username, they are the Source System username.
           the get_safe_username function is to convert that to Forgejo equivalent"""
 from dataclasses import dataclass, field
+from typing import Literal
 
 
 
@@ -130,12 +131,18 @@ class CanonicalRepoMembership:
        nested team / group structure in the source system."""
     username:str
     repository:CanonicalRepo
-    hierarchy:str|None
+    hierarchy:tuple[HierarchyNode, ...] | None
     access_level:str
 
     def get_safe_username(self) -> str:
         """Get Forgejo safe username"""
         return name_clean(self.username)
+
+    @dataclass(frozen=True)
+    class HierarchyNode:
+        """Define the hierachy of this node as explained in the class CanonicalRepoMembership"""
+        name: str
+        relation: Literal["sub", "desc"]|None = None
 
 
 

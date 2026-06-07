@@ -1,4 +1,5 @@
 """GitLab Migration source definition"""
+from copy import copy
 import os
 import re
 from typing import Iterator, override
@@ -367,13 +368,12 @@ class GitLabMigrationSource(MigrationSource):
         # ancestor_groups = project.groups.list(get_all=True)
         # group_ids = [anc.get_id() for anc in self._iter_all_groups_of_project(project)]
         try:
-            path_to_group = ""
             for group in self._iter_all_groups_of_project(project):
                 # add all repo_accessors for this group
+                root_hierarchy = [CanonicalRepoMembership.HierarchyNode(name=group.path)]
                 repo_accessors_members += self._process_group(repository=repository,
                                                               group=group,
-                                                              parent_path=path_to_group,
-                                                              depth=1)
+                                                              hierarchy=root_hierarchy)
 
         except IterativeFetchError:
             fg_print.error(f"Failed to load all Groups for Project {project.path}."
@@ -383,14 +383,14 @@ class GitLabMigrationSource(MigrationSource):
 
     def _process_group(self, repository : CanonicalRepo,
                        group:gitlab.v4.objects.Group,
-                       parent_path:str,
-                       depth:int) -> list[CanonicalRepoMembership]:
+                       hierarchy : list[CanonicalRepoMembership.HierarchyNode]
+                       ) -> list[CanonicalRepoMembership]:
         """A recursive trawler of groups, descendant and sub groups"""
         group_id = group.get_id()
         repo_accessors_members : list[CanonicalRepoMembership] = []
         # retrieve the full group object so we can get the members.
         group = self.gitlab_api.groups.get(group_id)
-        path_to_group = parent_path+"/"+group.path
+
         fg_print.debug(f"Loading inherited users from owner group {group_id}")
         # For every user that has access to this group
         try:
@@ -406,44 +406,38 @@ class GitLabMigrationSource(MigrationSource):
                                             f"{group_member.username}. "
                                             "Can possibly be deleted after import!")
 
-                #TODO member roles are not parsed at all. This information is lost
-
                 repo_accessors_members.append(CanonicalRepoMembership(
                                                 username = group_member.username,
                                                 repository = repository,
-                                                hierarchy=path_to_group,
+                                                hierarchy=hierarchy,
                                                 access_level = group_member.access_level))
 
+            depth = len(hierarchy)
             if depth <= self.gitlab_config.MAX_DESCENDANT_GROUP_DEPTH:
-                new_depth = depth + 1
-                path_to_descendant_group = path_to_group
-                if depth == 1:
-                    # just an idea to distinguish child group path types
-                    path_to_descendant_group += ":d:/"
 
                 for descendant_group in self._iter_all_descendant_groups_of_group(group=group):
+                    desc_hierarchy = copy(hierarchy)
+                    desc_hierarchy.append(CanonicalRepoMembership.HierarchyNode(
+                                                name=descendant_group.path,
+                                                relation="desc"))
                     descendant_group_id = descendant_group.get_id()
                     descendant_group = self.gitlab_api.groups.get(descendant_group_id)
                     repo_accessors_members += self._process_group(
                                                         repository=repository,
                                                         group=descendant_group,
-                                                        parent_path=path_to_descendant_group,
-                                                        depth=new_depth)
+                                                        hierarchy=desc_hierarchy)
             if depth <= self.gitlab_config.MAX_SUB_GROUP_DEPTH:
-                new_depth = depth + 1
-                path_to_sub_group = path_to_group
-                if depth == 1:
-                    # just an idea to distinguish child group path types
-                    path_to_sub_group += ":s:/"
-
                 for sub_group in self._iter_all_sub_groups_of_group(group=group):
+                    sub_hierarchy = copy(hierarchy)
+                    sub_hierarchy.append(CanonicalRepoMembership.HierarchyNode(
+                                                name=sub_hierarchy.path,
+                                                relation="sub"))
                     sub_group_id = sub_group.get_id()
                     sub_group = self.gitlab_api.groups.get(sub_group_id)
                     repo_accessors_members += self._process_group(
                                                         repository=repository,
                                                         group=sub_group,
-                                                        parent_path=path_to_sub_group,
-                                                        depth=new_depth)
+                                                        hierarchy=sub_hierarchy)
 
         except IterativeFetchError:
             fg_print.error(f"Failed to load all Group Members for Group {group.name}."
