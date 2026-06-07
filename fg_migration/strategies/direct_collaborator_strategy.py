@@ -186,11 +186,8 @@ class DirectCollaboratorOnlyStrategy(AccessMappingStrategy):
 
         permissions = role_definition.permission
 
-        if "admin" in permissions:
-            return "admin"
-        if "write" in permissions:
-            return "write"
-        if "read" in permissions:
-            return "read"
+        for role in ("owner", "admin", "write", "read"):
+            if role in permissions:
+                return role
 
         return None

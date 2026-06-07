@@ -560,14 +560,9 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
 
         permissions = role_definition.permission
 
-        if "admin" in permissions:
-            return "admin"
-
-        if "write" in permissions:
-            return "write"
-
-        if "read" in permissions:
-            return "read"
+        for role in ("owner", "admin", "write", "read"):
+            if role in permissions:
+                return role
 
         return None
 
@@ -691,7 +686,8 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
         # get forgejo team definition matching gitlab permission level
         repository_role : ForgejoRepositoryRole = migration_source.get_repository_role(
                                                         source_access_level=source_access_level)
-
+        #fg_print.debug(f"Role for access_level {source_access_level} : {repository_role.id},"
+        #               f" custom={repository_role.is_custom}")
         if repository_role.is_custom:
             nearest_repository_role = None
             if fuzzy:

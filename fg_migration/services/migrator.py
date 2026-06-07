@@ -77,6 +77,20 @@ class Migrator:
             raise RuntimeError("Migration cannot be run, missing mapped roles"
                                " in destination system")
 
+        owner_count=0
+        for item in self.migration_dest.role_definitions.items():
+            if item[1].permission == "owner":
+                owner_count += 1
+        match owner_count:
+            case 0:
+                fg_print.error("A single OWNER role with owner permission MUST be defined in the fogrejo_user_roles.yaml file")
+                raise ValueError()
+            case 1:
+                pass
+            case _:
+                fg_print.error("More than the permitted one OWNER role with owner permission has been defined in the fogrejo_user_roles.yaml file")
+                raise ValueError()
+
 
 
     #TODO reenable this code and update it to work (it isn't strictly required,
