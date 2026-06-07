@@ -1,12 +1,12 @@
 """Only contains the Migrator - a migration engine from system x to Forgejo"""
 import base64
 
-from pyforgejo import ApiError, Repository
-import requests
-from requests import RequestException
-from pyforgejo.core.api_error import ApiError
+from pyforgejo import Repository
 
-from fg_migration.strategies.access_level_strategy import AccessLevelAccessMappingStrategy
+from fg_migration.strategies.access_level_mapping_strategy import AccessLevelAccessMappingStrategy
+from fg_migration.strategies.direct_collaborator_strategy import DirectCollaboratorOnlyStrategy
+from fg_migration.strategies.existing_forgejo_preserving_strategy import ExistingForgejoPreservingStrategy
+from fg_migration.strategies.strict_access_level_mapping_strategy import StrictAccessLevelMappingStrategy
 from fg_migration.utils import fg_print
 from fg_migration.strategies.access_mapping_strategy import AccessMappingStrategy
 from fg_migration.adapters.forgeo_types import ForgejoApiBuilder, IterativeFetchError
@@ -34,9 +34,28 @@ class Migrator:
         self.migration_config = migration_config
         self.migration_source = migration_source
         self.fg_api_builder = fg_api_builder
-        self.access_mapping_strategy = AccessLevelAccessMappingStrategy(
-                                            migration_dest=self.migration_dest,
-                                            migration_config=self.migration_config)
+
+        strategy_id = migration_config.ACCESS_MAPPING_STRATEGY
+        match strategy_id:
+            case "access_level":
+                strategy = AccessLevelAccessMappingStrategy(
+                                                    migration_dest=self.migration_dest,
+                                                    migration_config=self.migration_config)
+            case "strict_access_level":
+                strategy = StrictAccessLevelMappingStrategy(
+                                                    migration_dest=self.migration_dest,
+                                                    migration_config=self.migration_config)
+            case "no_teams":
+                strategy = DirectCollaboratorOnlyStrategy(
+                                                    migration_dest=self.migration_dest,
+                                                    migration_config=self.migration_config)
+            case "preserve_existing_teams":
+                strategy = ExistingForgejoPreservingStrategy(
+                                                    migration_dest=self.migration_dest,
+                                                    migration_config=self.migration_config)
+            case _:
+                raise ValueError(f"Unexpected strategy_id: {strategy_id}")
+        self.access_mapping_strategy = strategy
         self.run_logic_checks()
 
 
@@ -281,28 +300,24 @@ class Migrator:
             fg_print.info(f"Importing {source_repo.source_system} {source_repo.source_type}"
                           f" {source_repo.name} from {source_repo.clone_url}...")
 
-            try:
-                imported_repo : Repository = self.migration_dest.repo_migrate(
-                                            source_repo=source_repo,
-                                            forgejo_owner=forgejo_owner,
-                                            service="gitlab",
-                                            issues=True,
-                                            labels=True,
-                                            milestones=True,
-                                            mirror=False,
-                                            pull_requests=True,
-                                            releases=True,
-                                            wiki=True,
-                                    )
+            imported_repo : Repository = self.migration_dest.repo_migrate(
+                                        source_repo=source_repo,
+                                        forgejo_owner=forgejo_owner,
+                                        service="gitlab",
+                                        issues=True,
+                                        labels=True,
+                                        milestones=True,
+                                        mirror=False,
+                                        pull_requests=True,
+                                        releases=True,
+                                        wiki=True,
+                                )
+            if imported_repo is not None:
                 fg_print.info(
                     f"{source_repo.source_system} {source_repo.source_type}"
                     f" {source_repo.get_safe_username()} imported from {source_repo.clone_url}"
                     f" and available at {imported_repo.clone_url}!")
-            except (ApiError, RequestException) as e:
-                detail = self.migration_dest._get_exception_detail(e)
-                fg_print.error(f"{source_repo.source_system} {source_repo.source_type}"
-                               f" {source_repo.get_safe_username()} import failed from url"
-                               f" {source_repo.clone_url} : {detail}")
+
 
 
 

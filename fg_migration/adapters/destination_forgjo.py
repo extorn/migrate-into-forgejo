@@ -604,27 +604,35 @@ class ForgejoDestination:
         releases: bool = True,
         service: MigrateRepoOptionsService | None = None,
         wiki: bool = True,
-    ) -> Repository:
+    ) -> Repository | None:
         """Migrate a repository from the source service to Forgejo"""
 
-        self.fg_api.repository.repo_migrate(
-                                            auth_password=source_repo.auth_password,
-                                            auth_username=source_repo.auth_username,
-                                            auth_token=source_repo.auth_token,
-                                            clone_addr=source_repo.clone_url,
-                                            description=source_repo.description,
-                                            service=service,
-                                            issues=issues,
-                                            labels=labels,
-                                            milestones=milestones,
-                                            mirror=mirror,
-                                            pull_requests=pull_requests,
-                                            releases=releases,
-                                            private=source_repo.is_private,
-                                            repo_name=source_repo.get_safe_username(),
-                                            uid=forgejo_owner.id,
-                                            wiki=wiki,
-                                    )
+        try:
+            repo = self.fg_api.repository.repo_migrate(
+                                                auth_password=source_repo.auth_password,
+                                                auth_username=source_repo.auth_username,
+                                                auth_token=source_repo.auth_token,
+                                                clone_addr=source_repo.clone_url,
+                                                description=source_repo.description,
+                                                service=service,
+                                                issues=issues,
+                                                labels=labels,
+                                                milestones=milestones,
+                                                mirror=mirror,
+                                                pull_requests=pull_requests,
+                                                releases=releases,
+                                                private=source_repo.is_private,
+                                                repo_name=source_repo.get_safe_username(),
+                                                uid=forgejo_owner.id,
+                                                wiki=wiki,
+                                        )
+            return repo
+        except (ApiError, RequestException) as e:
+                detail = self._get_exception_detail(e)
+                fg_print.error(f"{source_repo.source_system} {source_repo.source_type}"
+                               f" {source_repo.get_safe_username()} import failed from url"
+                               f" {source_repo.clone_url} : {detail}")
+        return None
 
 
 

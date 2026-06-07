@@ -40,7 +40,7 @@ The code has been written in such a way as to facilitate painless extension to l
 
 ### How to use with venv
 
-To keep your local system clean, it is preferrable to use a virtual environment.  
+To keep your local system clean, it is preferrable to use a virtual environment.
 You can follow these steps:
 
 N.b, on windows in cmd or powershell, run `migration/bin/activate`, not `source migration/bin/activate`
@@ -66,14 +66,14 @@ Please alter the values in this file to match your personal configuration desire
 
 ### **gitlab\_forgejo\_roles\_map.yaml**
 
-This file contains a list of mappings from gitlab access levels to  
-Forgejo roles as defined in the forgejo\_user\_roles.yaml file. Feel free  
-to change the values in this, add more or delete them as you wish to match  
+This file contains a list of mappings from gitlab access levels to
+Forgejo roles as defined in the forgejo\_user\_roles.yaml file. Feel free
+to change the values in this, add more or delete them as you wish to match
 your requirements.
 
 ### **.migrate.ini file**
 
-You need to create a configuration file called `.migrate.ini` and store it in the same directory of the script.  
+You need to create a configuration file called `.migrate.ini` and store it in the same directory of the script.
 :bulb: `.migrate.ini` is listed in `.gitignore`.
 
 ```
@@ -122,7 +122,7 @@ gitlab_admin_pass = <your-gitlab-password>
 ### Which protocol should git connect to gitlab using? <ssh/https>
 #gitlab_sync_connection_type = https
 
-### If your gitlab instance requires client authentication, 
+### If your gitlab instance requires client authentication,
 ### uncomment these parameters, and provide the appropriate paths
 ### If gitlab_client_auth_cert is provided, client authentication is switched on
 #gitlab_client_auth_cert = /path/to/gitlab_client_auth_cert.pem
@@ -134,7 +134,7 @@ gitlab_admin_pass = <your-gitlab-password>
 ### If True, Add a Forgejo team for every possible gitlab group member access level
 #add_empty_teams_to_organizations=False
 
-### If True, Add all Forgejo organisation teams to the repository owned by their organization, not just those with current users 
+### If True, Add all Forgejo organisation teams to the repository owned by their organization, not just those with current users
 #add_empty_teams_to_repositories=False
 
 ### If an organization team exists matching the role of a user being imported:
@@ -156,6 +156,11 @@ gitlab_admin_pass = <your-gitlab-password>
 
 ### If True, allow the closest higher permission defined Forgejo team to be used in lieu (lower have precedence over higher)
 #allow_fuzzy_auth_upgrade=False
+
+### Define how the Organizations, Teams and Users are created (see comments in strategies files for examples)
+# Pick one of [access_level,strict_access_level,no_teams,preserve_existing_teams]
+# Note, the default is the one I've used. The others should work, but if you encounter a bug, please let me know so it can be fixed for other people (ideally, send me a fix ;-) ).
+access_mapping_strategy=access_level
 
 
 

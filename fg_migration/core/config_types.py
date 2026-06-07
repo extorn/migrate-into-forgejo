@@ -7,7 +7,7 @@ import datetime
 @dataclass(frozen=True)
 class MigrationConfig:
     """The configuration options specific to migration from system x to Forgejo"""
-    MIGRATION_DATE_TIME : str
+    MIGRATION_DATE_TIME:str
     USE_EXISTING_TEAMS:bool
     ADD_EMPTY_TEAMS_TO_ORGANIZATIONS:bool
     ADD_EMPTY_TEAMS_TO_REPOSITORIES:bool
@@ -15,6 +15,7 @@ class MigrationConfig:
     IS_FUZZY_USERS_ALLOWED:bool
     ALLOW_FUZZY_AUTH_DOWNGRADE:bool
     ALLOW_FUZZY_AUTH_UPGRADE:bool
+    ACCESS_MAPPING_STRATEGY:str
 
     @classmethod
     def from_config(cls, config:configparser.RawConfigParser, section:str="migrate"):
@@ -38,6 +39,7 @@ class MigrationConfig:
                                                            fallback=False),
             ALLOW_FUZZY_AUTH_UPGRADE = config.getboolean(section, option="allow_fuzzy_auth_upgrade",
                                                          fallback=False),
+            ACCESS_MAPPING_STRATEGY = config.get(section, option="access_mapping_strategy", fallback="access_level")
         )
 
 @dataclass(frozen=True)
