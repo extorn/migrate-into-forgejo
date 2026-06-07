@@ -7,9 +7,10 @@
 | **File** | **Purpose** | **Notes** |
 | --- | --- | --- |
 | **ADAPTERS** |   |   |
-| forgejo\_types.py | A few useful utility classes used by the ForgejoDestination class | Extracted primarily to try and reduce the volume of code in forgejo.py |
-| forgejo.py | A class that wraps the pyforge API, Canonical Types are passed in to many of the functions | The key idea for this was to extract a lot of print statements from the migration logic to make that more readable, but it's become more useful over time. Now it contains a class ForgejoDestination, that the migrator uses. |
-| gitlab.py | An implementation (the only so far) of the class MigrationSource | This class extracts data from gitlab into Canonical classes which are then loaded into Forgejo by the migration code. This class is driven by the migrator |
+| forgejo\_types.py | A few useful utility classes used by the ForgejoDestination class | Extracted primarily to try and reduce the volume of code in destination\_forgejo.py |
+| destination\_forgejo.py | A class that wraps the pyforge API, Canonical Types are passed in to many of the functions | The key idea for this was to extract a lot of print statements from the migration logic to make that more readable, but it's become more useful over time. Now it contains a class ForgejoDestination, that the migrator uses. |
+| gitlab\_types.py | A few useful utility classes used by the GitlabMigrationSource class | Extracted primarily to try and reduce the volume of code in source\_gitlab.py |
+| source\_gitlab.py | An implementation (the only so far) of the class MigrationSource | This class extracts data from gitlab into Canonical classes which are then loaded into Forgejo by the migration code. This class is driven by the migrator |
 | **CORE** |   |   |
 | canonical\_types.py | A set of classes which act as a bridge between the source systems and Forgejo types. | The key idea is that it is a lot easier mentally to see what is going on if you know a type is canonical it has come from the source system, if it is e.g. a Team, or User, it has come from Forgejo. These classes could equally have been called Import\[ed\]\<XYZ> or similar. |
 | config\_types.py | Immutable Data classes that configuration files are loaded into, these types are passed around the rest of the code | These are loaded with data from the .migrate.ini file sections |

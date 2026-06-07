@@ -16,7 +16,6 @@ Options
 """
 import os
 import configparser
-from pyforgejo import PyforgejoApi
 from docopt import docopt
 from click import confirm
 from fg_migration.utils import fg_print
@@ -42,12 +41,12 @@ forgejo_config = ForgejoConfig.from_config(config=config)
 
 
 def ask_confirmation() -> None:
-        """Ask for confirmation before proceeding"""
-        fg_print.info("This script deletes your data. Use it with a grain of salt!")
-        choice = confirm("Do you want continue?")
-        if not choice:
-            fg_print.info("OK. See you next time!")
-            os.sys.exit()
+    """Ask for confirmation before proceeding"""
+    fg_print.info("This script deletes your data. Use it with a grain of salt!")
+    choice = confirm("Do you want continue?")
+    if not choice:
+        fg_print.info("OK. See you next time!")
+        os.sys.exit()
 
 
 
@@ -57,9 +56,9 @@ if __name__ == "__main__":
     # control debug logging
     if args["--debug"]:
         fg_print.IS_DEBUG=True
-    
-    if not any([args["--orgs-repos"], args["--orgs"], 
-                args["--user-repos"], args["--current-user-repos"], 
+
+    if not any([args["--orgs-repos"], args["--orgs"],
+                args["--user-repos"], args["--current-user-repos"],
                 args["--users"]]):
         fg_print.error("Please specify what to delete! You can use --help for more information.")
         os.sys.exit()
@@ -69,7 +68,7 @@ if __name__ == "__main__":
 
     fg_api_builder = ForgejoApiBuilder(forgejo_config=forgejo_config)
     fg_api = fg_api_builder.build_forgejo_api_client()
-    fg_conn_success= fg_api_builder.test_forgejo_connection(fg_api=fg_api)
+    fg_conn_success = fg_api_builder.test_forgejo_connection(fg_api=fg_api)
     if not fg_conn_success:
         os.sys.exit()
     purger = ForgejoPurger(fg_api=fg_api, forgejo_config=forgejo_config)
@@ -86,7 +85,7 @@ if __name__ == "__main__":
     if args["--users"]:
         PURGE_OPT = "true" if args["--purge"] else "false"
         purger.del_users(PURGE_OPT)
-    
+
     purger.close()
 
     ERR_COUNT = fg_print.GLOBAL_ERROR_COUNT

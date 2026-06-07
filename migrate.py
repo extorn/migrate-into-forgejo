@@ -27,11 +27,12 @@ from docopt import docopt
 
 
 from fg_migration.adapters.forgeo_types import ForgejoApiBuilder
+from fg_migration.adapters.gitlab_types import GitLabApiBuilder
+from fg_migration.adapters.source_gitlab import GitLabMigrationSource
 from fg_migration.core.migration_source_type import MigrationSource
 from fg_migration.core.config_types import (ForgejoConfig, GitLabConfig,
                                             GitLabMigrationConfig, MigrationConfig)
 from fg_migration.adapters.destination_forgjo import ForgejoDestination
-from fg_migration.adapters.source_gitlab import GitLabApiBuilder, GitLabMigrationSource
 from fg_migration.services.migrator import Migrator
 
 from fg_migration.utils import fg_print

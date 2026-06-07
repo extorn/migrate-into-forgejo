@@ -1,8 +1,10 @@
 """Only contains the Migrator - a migration engine from system x to Forgejo"""
 import base64
 
-from pyforgejo import Repository
+from pyforgejo import ApiError, Repository
 import requests
+from requests import RequestException
+from pyforgejo.core.api_error import ApiError
 
 from fg_migration.strategies.access_level_strategy import AccessLevelAccessMappingStrategy
 from fg_migration.utils import fg_print
@@ -50,7 +52,7 @@ class Migrator:
                            f"source system but missing in the destination system: {missing_roles}."
                            " Please add these roles to the destination system or remove the mapping"
                            " for these roles in the migration configuration and try again.")
-            raise Exception("Migration cannot be run, missing mapped roles in destination system")
+            raise RuntimeError("Migration cannot be run, missing mapped roles in destination system")
 
     #TODO reenable this code and update it to work (it isn't strictly required,
     #     but someone may find it useful to customise what happens normally in the auto-migrate)
@@ -255,7 +257,7 @@ class Migrator:
                     f"{source_repo.source_system} {source_repo.source_type}"
                     f" {source_repo.get_safe_username()} imported from {source_repo.clone_url}"
                     f" and available at {imported_repo.clone_url}!")
-            except Exception as e:
+            except (ApiError, RequestException) as e:
                 detail = self.migration_dest._get_exception_detail(e)
                 fg_print.error(f"{source_repo.source_system} {source_repo.source_type}"
                                f" {source_repo.get_safe_username()} import failed from url"

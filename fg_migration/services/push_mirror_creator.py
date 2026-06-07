@@ -4,6 +4,7 @@ import os
 import gitlab
 from pyforgejo import PushMirror, PyforgejoApi
 from pyforgejo.core import ApiError
+from requests import RequestException
 
 from fg_migration.utils import fg_print
 from fg_migration.core.config_types import ForgejoConfig, GitLabConfig
@@ -51,9 +52,9 @@ class PushMirrorCreator:
     ) -> list[PushMirror]:
 
         try:
-            pushMirrors = self.fg_api.repository.repo_list_push_mirrors(owner=owner, repo=repo)
-            return pushMirrors
-        except Exception as e:
+            push_mirrors = self.fg_api.repository.repo_list_push_mirrors(owner=owner, repo=repo)
+            return push_mirrors
+        except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
                 f"Failed to load push mirrors for {owner}/{repo}: ",
@@ -79,7 +80,7 @@ class PushMirrorCreator:
             if result:
                 fg_print.info(f"Push mirror created on Forgejo for {owner}/{repo}")
                 return True
-        except Exception as e:
+        except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
                 f"Failed to create push mirror on Forgejo for "
@@ -103,7 +104,7 @@ class PushMirrorCreator:
                 )
             return True
 
-        except Exception as e:
+        except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
                 f"Failed to delete push mirror {remote_name} "
@@ -208,8 +209,8 @@ class PushMirrorCreator:
                     continue
 
             success = self._create_forgejo_push_mirror(owner=owner, repo=repo)
-            # if not success:
-            #     fg_print.error(f"Failed mirror for {owner}/{repo}")
+            if not success:
+                fg_print.warning(f"Failed mirror for {owner}/{repo}")
 
 
 

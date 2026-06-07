@@ -8,13 +8,14 @@ import re
 import time
 from typing import Callable, TypeVar, Iterator, override
 # Forgejo API imports:
-from pyforgejo import ApiError, CreateTeamOptionPermission, PyforgejoApi, Team
+from pyforgejo import CreateTeamOptionPermission, PyforgejoApi, Team
+from pyforgejo.core.api_error import ApiError
 
 
 from fg_migration.utils import fg_print
 from fg_migration.core.config_types import ForgejoConfig
 from fg_migration.utils.utils import diff_dataclasses
-from httpx import Client as HttpxClient
+from httpx import Client as HttpxClient, HTTPError
 
 class ForgejoApiBuilder:
     """A builder for the PyForgejoApi, configuring authentication etc in a central way"""
@@ -53,7 +54,7 @@ class ForgejoApiBuilder:
 
         try:
             response = fg_api.miscellaneous.get_version()
-        except Exception as e:
+        except (ApiError, HTTPError) as e:
             fg_print.error(f"Failed to connect to Forgejo! {e}")
             return False
         fg_ver = response.version
@@ -276,7 +277,7 @@ class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
         return role
 
 class IterativeFetchError(Exception):
-    """Raised when an the ApiPaginator fails to retrieve the next page of data for some reason"""
+    """Raised when the ApiPaginator fails to retrieve the next page of data for some reason"""
 
 
 T = TypeVar("T")
