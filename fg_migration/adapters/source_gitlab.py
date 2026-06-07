@@ -342,12 +342,9 @@ class GitLabMigrationSource(MigrationSource):
         try:
             for group in self._iter_all_groups_of_project(project):
                 group_id = group.get_id()
+                # retrieve the full group object so we can get the members.
+                group = self.gitlab_api.groups.get(group_id)
                 fg_print.debug(f"Loading inherited users from owner group {group_id}")
-                # group: gitlab.v4.objects.Group = self.gitlab_api.groups.get(id=group_id)
-                # Group members are users. They share a finite set of access_level
-                # we can map that access level to a team.
-                # groupMembers: list[gitlab.v4.objects.GroupMember] = \
-                #                                              group.members.list(get_all=True)
                 # For every user that has access to this group
                 try:
                     for group_member in self._iter_all_members_of_group(group=group):
@@ -366,7 +363,7 @@ class GitLabMigrationSource(MigrationSource):
                                                         repository = repository,
                                                         access_level = group_member.access_level))
                 except IterativeFetchError:
-                    fg_print.error(f"Failed to load all Group Members for Group {group.path}."
+                    fg_print.error(f"Failed to load all Group Members for Group {group.name}."
                                    " Import will need to be run again for Repository Accessors")
         except IterativeFetchError:
             fg_print.error(f"Failed to load all Groups for Project {project.path}."
