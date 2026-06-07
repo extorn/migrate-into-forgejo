@@ -1,13 +1,17 @@
+"""contains the ExistingForgejoPreservingStrategy class"""
+from copy import deepcopy
 from typing import override
 
-from fg_migration.adapters.forgeo_types import IterativeFetchError
-from fg_migration.core.canonical_types import CanonicalOrganization
+from pyforgejo import Team
+
+from fg_migration.adapters.forgeo_types import ForgejoTeamDefinition, IterativeFetchError
+from fg_migration.core.canonical_types import CanonicalOrganization, CanonicalUser
 from fg_migration.core.migration_source_type import MigrationSource
-from fg_migration.strategies.strict_access_level_mapping_strategy import StrictMirrorAccessMappingStrategy
+from fg_migration.strategies.access_level_mapping_strategy import AccessLevelAccessMappingStrategy
 from fg_migration.utils import fg_print
 
 
-class ExistingForgejoPreservingStrategy(StrictMirrorAccessMappingStrategy):
+class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
     """
     Migration strategy that preserves all pre-existing Forgejo structures.
 
@@ -72,108 +76,155 @@ class ExistingForgejoPreservingStrategy(StrictMirrorAccessMappingStrategy):
 
     TEAM_SUFFIX = "_migrated"
 
+     # old_name.lower()) to new definition
+    org_remapped_teams_cache : dict[str,ForgejoTeamDefinition] = {}
+
     @override
-    def import_teams(
+    def import_teams(self, migration_source: MigrationSource, organization: CanonicalOrganization):
+        assert len(self.org_remapped_teams_cache) == 0 # check not inadvertently changing this
+        super().import_teams(migration_source=migration_source, organization=organization)
+        self.org_remapped_teams_cache.clear() # ensure it is ready for the next organization
+
+
+    @override
+    def _find_existing_org_team_for_new_users_matching(
         self,
-        migration_source: MigrationSource,
         organization: CanonicalOrganization,
-    ):
+        existing_forgejo_teams_map: dict[str, Team], # map[Team.name.lower() : Team]
+        forgejo_team_definition:ForgejoTeamDefinition,
+        canonical_team_members: list[CanonicalUser],
+    ) -> AccessLevelAccessMappingStrategy.TeamMatchResult:
 
-        fg_print.info(
-            f"Preserving existing Forgejo teams for "
-            f"{organization.get_safe_username()}"
-        )
-
-        try:
-            existing_teams = {
-                t.name.lower(): t
-                for t in self.migration_dest.iter_forgejo_teams(
-                    org_name=organization.get_safe_username()
-                )
-                if t.name
-            }
-
-        except IterativeFetchError as e:
-            fg_print.error(
-                f"Failed to load existing teams: {e}"
+        remapped = self.org_remapped_teams_cache.get(forgejo_team_definition.name.lower())
+        if remapped is not None:
+            # skip the rest of the logic in this function (we know there is a match).
+            matched_team = self._find_matching_team(
+                existing_forgejo_teams_map,
+                remapped,
             )
             return
 
-        for group in organization.groups:
+        #
+        # First look for an exact-name team.
+        #
+        matched_team = self._find_matching_team(
+            existing_forgejo_teams_map,
+            forgejo_team_definition,
+        )
 
-            base_name = group.get_safe_username()
+        if matched_team is None:
+            # No team exists, can create a team as desired
+            return self.TeamMatchNoResult(team_definition=forgejo_team_definition)
 
-            team_name = self._generate_safe_team_name(
-                base_name,
-                existing_names=set(existing_teams.keys()),
-            )
-
-            if team_name.lower() in existing_teams:
-                existing_team = existing_teams[
-                    team_name.lower()
-                ]
-
-            else:
-
-                definition = self._group_to_team_definition(
-                    group
-                )
-
-                definition.name = team_name
-
-                fg_print.info(
-                    f"Creating migration team {team_name}"
-                )
-
-                existing_team = (
-                    self.migration_dest
-                    .forgejo_add_organization_team(
-                        org_name=organization.get_safe_username(),
-                        definition=definition,
-                    )
-                )
-
-                if existing_team is None:
-                    fg_print.error(
-                        f"Failed to create team "
-                        f"{team_name}"
-                    )
-                    continue
-
-                existing_teams[
-                    team_name.lower()
-                ] = existing_team
-
-            usernames = {
-                m.username
-                for m in group.memberships
-                if m.username
+        try:
+            existing_usernames = {
+                member.login
+                for member in self.migration_dest
+                    .iter_forgejo_team_members(matched_team)
+                if member.login is not None
             }
+        except IterativeFetchError:
+            return None
 
-            self.import_team_users_from_usernames(
-                organization=organization,
-                usernames=usernames,
-                dest_team=existing_team,
-                team_members_cache={},
-                is_new_team=False,
+        # perform fairly standard lookup of team.
+        imported_usernames = {
+            user.get_safe_username()
+            for user in canonical_team_members
+        }
+
+        #
+        # Exact membership match -> reuse.
+        #
+        if existing_usernames == imported_usernames:
+            fg_print.info(
+                "Pre-existing team members exactly match team "
+                "being imported, so reusing.\n"
+                f"Affected Forgejo Organization "
+                f"{organization.get_safe_username()} "
+                f"Team {matched_team.name}"
             )
 
+            return self.TeamMatchExactResult(matched_team=matched_team)
+
+        #
+        # Explicitly configured to use existing teams.
+        #
+        if self.migration_config.USE_EXISTING_TEAMS:
+            fg_print.warning(
+                "Pre-existing team users will be granted "
+                "access to new repositories that are created "
+                "with access granted to this team.\n"
+                f"Affected Forgejo Organization "
+                f"{organization.get_safe_username()} "
+                f"Team {matched_team.name}, "
+                f"usernames: {existing_usernames}"
+            )
+
+            return self.TeamMatchExactResult(matched_team=matched_team)
+
+        #
+        # Conflict:
+        # Keep existing team untouched.
+        # Reuse a migrated team if one already exists.
+        #
+        existing_team_names = set(existing_forgejo_teams_map.keys())
+        migrated_name = self._generate_safe_team_name(forgejo_team_definition.name,
+                                                      existing_names=existing_team_names)
+
+        migrated_team = existing_forgejo_teams_map.get(migrated_name.lower())
+
+        if migrated_team is not None:
+
+            try:
+                migrated_usernames = {
+                    member.login
+                    for member in self.migration_dest
+                        .iter_forgejo_team_members(
+                            migrated_team
+                        )
+                    if member.login is not None
+                }
+            except IterativeFetchError:
+                return None
+
+            if migrated_usernames == imported_usernames:
+                fg_print.info(
+                    f"Reusing migrated team "
+                    f"{migrated_team.name}"
+                )
+
+                return self.TeamMatchExactResult(
+                    matched_team=migrated_team
+                )
+
+        #
+        # Force creation of a new team.
+        #
+        updated_definition = deepcopy(forgejo_team_definition)
+        updated_definition.name = migrated_name
+        # update the cache so we get a headstart next time.
+        self.org_remapped_teams_cache[forgejo_team_definition.name.lower()]=updated_definition
+        return self.TeamMatchNoResult(team_definition=updated_definition)
+
+    @override
     def _generate_safe_team_name(
         self,
         source_name: str,
         existing_names: set[str],
     ) -> str:
 
-        if source_name.lower() not in existing_names:
-            return source_name
-
-        candidate = (
+        migrated_name = (
             f"{source_name}{self.TEAM_SUFFIX}"
         )
 
-        if candidate.lower() not in existing_names:
-            return candidate
+        if migrated_name.lower() not in existing_names:
+            return migrated_name
 
+        #
+        # Reuse the same migrated name whenever possible.
+        # Only fall back to numbered names if there is an
+        # actual collision.
+        #
         counter = 1
 
         while True:
