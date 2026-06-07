@@ -69,14 +69,20 @@ def main():
         fg_print.IS_DEBUG=True
 
     fg_print.print_color(
-        fg_print.Bcolors.HEADER, "---=== GitLab to Forgejo migration ===---"
+        fg_print.Bcolors.HEADER, "---=== Migration to Forgejo ===---"
     )
     fg_print.info(f"Version: {SCRIPT_VERSION}\n")
 
-
+    #TODO switch migration_source based on config property
     gl_api_builder = GitLabApiBuilder(gitlab_config)
     gl_api = gl_api_builder.build_gitlab_api_client()
     gl_conn_success = gl_api_builder.test_gitlab_connection(gl_api)
+
+    migration_source : MigrationSource = GitLabMigrationSource(
+                                                gitlab_api=gl_api,
+                                                gitlab_config=gitlab_config,
+                                                gitlab_migration_config=migration_config_gitlab)
+
 
     fg_api_builder = ForgejoApiBuilder(forgejo_config=forgejo_config)
     fg_api = fg_api_builder.build_forgejo_api_client()
@@ -85,11 +91,6 @@ def main():
     if not (gl_conn_success and fg_conn_success):
         os.sys.exit()
 
-
-    migration_source : MigrationSource = GitLabMigrationSource(
-                                                gitlab_api=gl_api,
-                                                gitlab_config=gitlab_config,
-                                                gitlab_migration_config=migration_config_gitlab)
     migration_dest : ForgejoDestination = ForgejoDestination(fg_api=fg_api,
                                                              forgejo_config=forgejo_config)
     migrator = Migrator(migration_config=migration_config,
