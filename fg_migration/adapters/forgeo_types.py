@@ -2,6 +2,7 @@
 
 from abc import abstractmethod
 from dataclasses import dataclass, field
+from enum import StrEnum
 import os
 from pprint import pformat
 import re
@@ -16,6 +17,14 @@ from fg_migration.utils import fg_print
 from fg_migration.core.config_types import ForgejoConfig
 from fg_migration.utils.utils import diff_dataclasses
 from httpx import Client as HttpxClient, HTTPError
+
+class ForgejoPermission(StrEnum):
+    """Enum duplication of the PyForgeJoApi type CreateTeamOptionPermission.
+       The key difference is that it adds the 'secret' owner permission"""
+    OWNER = "owner"
+    ADMIN = "admin"
+    WRITE = "write"
+    READ = "read"
 
 class ForgejoApiBuilder:
     """A builder for the PyForgejoApi, configuring authentication etc in a central way"""

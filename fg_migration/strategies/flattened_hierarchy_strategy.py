@@ -1,9 +1,12 @@
 """contains the DirectCollaboratorOnlyStrategy class"""
 from typing import override
+from warnings import deprecated
 
 from pyforgejo import Team
 
-from fg_migration.strategies.access_mapping_strategy import BaseAccessMappingStrategy
+from fg_migration.adapters.destination_forgjo import ForgejoDestination
+from fg_migration.core.config_types import MigrationConfig
+from fg_migration.strategies.access_mapping_strategy import AccessMappingStrategy
 from fg_migration.core.canonical_types import (
     CanonicalOrganization,
     CanonicalRepo,
@@ -14,69 +17,100 @@ from fg_migration.core.migration_source_type import MigrationSource
 from fg_migration.utils import fg_print
 
 
-class DirectCollaboratorOnlyStrategy(BaseAccessMappingStrategy):
+@deprecated("Not Implemented")
+class FlattenedHierarchyStrategy(AccessMappingStrategy):
     """
-        Strategy that bypasses all access-level team modelling and assigns
-        repository access directly to users.
+Access mapping strategy that derives Forgejo teams from source-system
+group hierarchies rather than access levels.
 
-        This strategy treats repository memberships as the canonical representation
-        of authorization and does not attempt to group users into Forgejo teams.
-        Each repository accessor is imported as an individual collaborator with the
-        closest matching Forgejo permission.
+This strategy treats repository memberships and their originating group
+paths as the canonical representation of authorization. Nested groups are
+flattened into Forgejo-compatible team names, allowing GitLab subgroup and
+descendant-group structures to be represented without requiring Forgejo to
+support nested teams.
 
-        Example
-        -------
-        Given source-system membership data:
+Each unique hierarchy path is projected into a Forgejo team. Users are
+assigned to the team corresponding to the group through which they gained
+access, and repository permissions are granted through those teams whenever
+possible.
 
-            alice   -> Maintainer
-            bob     -> Maintainer
-            charlie -> Developer
-            dave    -> Guest
+Example
+-------
 
-        and a configured role mapping:
+Given the following GitLab group structure:
 
-            Maintainer -> admin
-            Developer  -> write
-            Guest      -> read
-            Auditor    -> read
+    engineering
+    ├── backend
+    │   └── api
+    └── frontend
 
-        Unlike team-based strategies, no additional Forgejo teams are created:
+and repository memberships:
 
-            Forgejo Organization
-                └── Owner Team (platform required)
+    alice   -> engineering/backend
+    bob     -> engineering/backend
+    charlie -> engineering/frontend
+    dave    -> engineering/backend/api
 
-        The following potential team structure is intentionally NOT created:
+the hierarchy is flattened into Forgejo teams:
 
-            forgejo-maintainers
-            forgejo-developers
-            forgejo-guests
-            forgejo-auditors
+    engineering-backend
+    engineering-frontend
+    engineering-backend-api
 
-        For repository "project-a", access is granted directly to users:
+Resulting Forgejo organization structure:
 
-            project-a
-                ├── alice   (admin)
-                ├── bob     (admin)
-                ├── charlie (write)
-                └── dave    (read)
+    engineering-backend
+    ├── alice
+    └── bob
 
-        Even if an access level exists in configuration but has no users:
+    engineering-frontend
+    └── charlie
 
-            Auditor -> read
+    engineering-backend-api
+    └── dave
 
-        no Forgejo team is created and no repository team assignment is made.
+Repository access example
+-------------------------
 
-        Behaviour:
-        - Does not create access-level Forgejo teams.
-        - Does not manage team membership.
-        - Does not attach teams to repositories.
-        - Imports all repository accessors as direct collaborators.
-        - Maps source access levels directly to Forgejo permissions.
-        - Requires only the mandatory Forgejo owner team.
-        - Ignores empty team definitions because no team modelling is performed.
-        - Suitable for migrations where preserving repository access is important
-        but reproducing the source-system team structure is not.
-        """
+For repository "project-a":
+
+    project-a
+        ├── engineering-backend
+        ├── engineering-frontend
+        └── engineering-backend-api
+
+Repository permissions are granted through the flattened hierarchy teams
+rather than through individual collaborators whenever possible.
+
+Hierarchy markers may optionally be preserved when generating team names.
+For example:
+
+    engineering/:s:/backend
+        -> engineering-sub-backend
+
+    engineering/:d:/platform/:d:/api
+        -> engineering-desc-platform-desc-api
+
+Behaviour:
+- Creates Forgejo teams from source-system group hierarchies.
+- Flattens nested group structures into Forgejo-compatible team names.
+- Preserves hierarchy information in team naming.
+- Imports organization membership through hierarchy-derived teams.
+- Grants repository access through hierarchy-derived teams.
+- Avoids creating direct collaborators when team-based access can represent
+  the authorization model.
+- Supports configurable naming conventions for flattened hierarchies.
+- Suitable for GitLab migrations where subgroup and descendant-group
+  structures should be preserved despite Forgejo lacking nested teams.
+"""
+
+    migration_dest:ForgejoDestination
+    migration_config:MigrationConfig
+
+    def __init__(self, migration_dest:ForgejoDestination, migration_config:MigrationConfig):
+        self.migration_dest = migration_dest
+        self.migration_config = migration_config
+        raise RuntimeError("Not Implemented yet")
 
     # ---------------------------------------------------------
     # Teams: explicitly disabled except for required owner team
