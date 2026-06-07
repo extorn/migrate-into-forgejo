@@ -144,7 +144,7 @@ class PushMirrorCreator:
                     f"Push mirror created on GitLab for {proj_path}"
                 )
 
-            except Exception as e:
+            except (gitlab.exceptions.GitlabError, RequestException) as e:
                 detail = str(e)
 
                 fg_print.error(
@@ -177,7 +177,7 @@ class PushMirrorCreator:
                         f"Push mirror deleted on GitLab for {proj_path}"
                     )
 
-            except Exception as e:
+            except (gitlab.exceptions.GitlabError, RequestException) as e:
                 detail = str(e)
 
                 fg_print.error(

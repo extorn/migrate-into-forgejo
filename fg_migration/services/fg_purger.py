@@ -3,6 +3,7 @@ import os
 
 from pyforgejo import PyforgejoApi
 from pyforgejo.core import ApiError
+from requests import RequestException
 
 from fg_migration.utils import fg_print
 from fg_migration.core.config_types import ForgejoConfig
@@ -61,7 +62,7 @@ class ForgejoPurger:
                                                                     repo_name=repo.name)
                             fg_print.info(f"Repository {repo.name} deleted on Forgejo"
                                           f" for {org.username}")
-                        except ApiError as e:
+                        except (ApiError, RequestException) as e:
                             detail = self._get_exception_detail(e)
                             fg_print.error(f"Error deleting repository {repo.name}"
                                            f" on Forgejo for {org.username}: {detail}")
@@ -79,7 +80,7 @@ class ForgejoPurger:
                 try:
                     self.forgejo_api.organization.org_delete(org_name=org.username)
                     fg_print.info(f"Organization {org.username} deleted on Forgejo")
-                except ApiError as e:
+                except (ApiError, RequestException) as e:
                     detail = self._get_exception_detail(e)
                     fg_print.error(f"Error deleting organization {org.name} on Forgejo: {detail}")
 
@@ -101,7 +102,7 @@ class ForgejoPurger:
                                                                     repo_name=repo.name)
                             fg_print.info(f"Repository {repo.name} deleted "
                                           f"on Forgejo for {user.login}")
-                        except ApiError as e:
+                        except (ApiError, RequestException) as e:
                             detail = self._get_exception_detail(e)
                             fg_print.error(f"Error deleting repository {repo.name}"
                                            f" on Forgejo for {user.login}: {detail}")
@@ -119,7 +120,7 @@ class ForgejoPurger:
                     self.forgejo_api.repository.repo_delete(org_name=user.login,
                                                             repo_name=repo.name)
                     fg_print.info(f"Repository {repo.name} deleted on Forgejo for {user.login}")
-                except ApiError as e:
+                except (ApiError, RequestException) as e:
                     detail = self._get_exception_detail(e)
                     fg_print.error(f"Error deleting repository {repo.name}"
                                    f" on Forgejo for {user.login}: {detail}")
@@ -137,6 +138,6 @@ class ForgejoPurger:
                     try:
                         self.forgejo_api.admin.delete_user(username=user.login, purge=purge)
                         fg_print.info(f"User {user.login} deleted on Forgejo")
-                    except ApiError as e:
+                    except (ApiError, RequestException) as e:
                         detail = self._get_exception_detail(e)
                         fg_print.error(f"Error deleting user {user.login} on Forgejo: {detail}")
