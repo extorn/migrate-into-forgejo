@@ -52,6 +52,8 @@ class ForgejoDestination:
         self.forgejo_team_to_role_mapper = ForgejoTeamRoleMapper(
                                                 role_definitions=self.role_definitions)
 
+
+
     def get_default_team_definitions(self) -> list[ForgejoTeamDefinition]:
         """retrieve a list of all default ForgejoTeamDefinition
            (no custom definitions will be added here)"""
@@ -873,7 +875,7 @@ class ForgejoDestination:
         organization: CanonicalOrganization,
         usernames: set[str],
         dest_team: Team,
-        team_members_cache: dict[int, set[str]],
+        team_members_cache: dict[int, set[str]], # map[Team.id -> {member.username}]
         is_new_team: bool,
     ):
         """Create an entry in the team for every user with a username in the set

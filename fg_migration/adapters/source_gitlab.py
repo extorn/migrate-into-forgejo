@@ -13,7 +13,11 @@ import yaml
 from fg_migration.utils import fg_print
 from fg_migration.adapters.destination_forgjo import ForgejoRepositoryRole
 from fg_migration.core.migration_source_type import MigrationSource
-from fg_migration.core.canonical_types import CanonicalGpgKey, CanonicalGroupMembership, CanonicalKey, CanonicalOrganization, CanonicalOrganizations, CanonicalRepo, CanonicalRepoMembership, CanonicalRepoMemberships, CanonicalSystemUser, CanonicalUser
+from fg_migration.core.canonical_types import (CanonicalGpgKey, CanonicalOrganizationMembership,
+                                               CanonicalKey, CanonicalOrganization,
+                                               CanonicalOrganizations, CanonicalRepo,
+                                               CanonicalRepoMembership, CanonicalRepoMemberships,
+                                               CanonicalSystemUser, CanonicalUser)
 from fg_migration.core.config_types import GitLabMigrationConfig, GitLabConfig
 
 
@@ -523,6 +527,62 @@ class GitLabMigrationSource(MigrationSource):
 
 
 
+    def _build_organization_from_group(self,group:gitlab.v4.objects.Group) -> CanonicalOrganization:
+
+        org_users: dict[str, CanonicalUser] = {}
+        memberships: list[CanonicalOrganizationMembership] = []
+
+        try:
+
+            for member in self._iter_all_members_of_group(group=group):
+
+                # handle ignored users
+                if self._is_ignore_gitlab_user(member.username):
+                    if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
+                        fg_print.warning(
+                            f"Ignored GitLab system user {member.username}"
+                        )
+                        continue
+                    else:
+                        fg_print.warning(
+                            f"Likely GitLab system user {member.username}"
+                        )
+
+                # store user (deduplicated)
+                if member.username not in org_users:
+                    org_users[member.username] = CanonicalUser(
+                        username=member.username
+                    )
+
+                # store membership FACT (this is the important part)
+                memberships.append(
+                    CanonicalOrganizationMembership(
+                        org_username=group.path,
+                        username=member.username,
+                        access_level=str(member.access_level),
+                    )
+                )
+
+        except IterativeFetchError:
+            fg_print.error(
+                f"Failed to load members for {self.source_system} "
+                f"Group {group.path}. Skipping group membership capture."
+            )
+            return None
+
+        this_org = CanonicalOrganization(
+            source_type="Group",
+            username=group.path,
+            full_name=group.full_name,
+            description=group.description,
+            members=list(org_users.values()),
+            memberships=memberships,
+        )
+
+        return this_org
+
+
+
     @override
     def list_organizations(self) -> CanonicalOrganizations:
         organizations = CanonicalOrganizations(
@@ -537,59 +597,12 @@ class GitLabMigrationSource(MigrationSource):
                     f"name={group.name} path={group.path} fullname={group.full_name}"
                 )
 
-                org_users: dict[str, CanonicalUser] = {}
-                memberships: list[CanonicalGroupMembership] = []
+                canonical_org = self._build_organization_from_group(group=group)
+                organizations.members.append(canonical_org)
 
-                try:
-                    for member in self._iter_all_members_of_group(group=group):
-
-                        # handle ignored users
-                        if self._is_ignore_gitlab_user(member.username):
-                            if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
-                                fg_print.warning(
-                                    f"Ignored GitLab system user {member.username}"
-                                )
-                                continue
-                            else:
-                                fg_print.warning(
-                                    f"Likely GitLab system user {member.username}"
-                                )
-
-                        # store user (deduplicated)
-                        if member.username not in org_users:
-                            org_users[member.username] = CanonicalUser(
-                                username=member.username
-                            )
-
-                        # store membership FACT (this is the important part)
-                        memberships.append(
-                            CanonicalGroupMembership(
-                                group_path=group.path,
-                                username=member.username,
-                                access_level=member.access_level,
-                            )
-                        )
-
-                except IterativeFetchError:
-                    fg_print.error(
-                        f"Failed to load members for {self.source_system} "
-                        f"Group {group.path}. Skipping group membership capture."
-                    )
-                    continue
-
-                this_org = CanonicalOrganization(
-                    source_type="Group",
-                    username=group.path,
-                    full_name=group.full_name,
-                    description=group.description,
-                    members=list(org_users.values()),
-                    memberships=memberships,
-                )
-
-                organizations.members.append(this_org)
-
-                if this_org.username is None:
+                if canonical_org.username is None:
                     os.sys.exit(1)
+
 
         except IterativeFetchError:
             fg_print.error(

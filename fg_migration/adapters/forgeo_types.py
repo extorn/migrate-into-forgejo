@@ -98,7 +98,7 @@ class ForgejoTeamDefinition:
     name: str
     description: str
     permissions: ForgejoRolePermissionDefinition
-    allow_empty: bool
+    allow_empty: bool | None # Only None when built from an existing team
 
     @staticmethod
     def from_team(team:Team, role_builder:ForgejoTeamRoleBuilder,
@@ -114,9 +114,11 @@ class ForgejoTeamDefinition:
 
             role_permissions = role_builder.get_role_permissions(role)
             # we don't cache these because teams are only unique in a given organization.
+             # Allow empty is only used when deciding on creating new teams so any value is safe.
             return ForgejoTeamDefinition(name = team.name,
                                          description = team.description,
-                                         permissions = role_permissions)
+                                         permissions = role_permissions,
+                                         allow_empty = None)
 
         raise ValueError("Role builder not available")
 

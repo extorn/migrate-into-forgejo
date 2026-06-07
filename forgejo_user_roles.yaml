@@ -10,6 +10,8 @@ roles:
     # This is the only group created by default by Forgejo.
     team_name: Owners
     team_description: Repository owners with full administrative access.
+    # Note: team_allow_empty is a secondary fine grained control for the general migration config add_empty_teams_to_organizations
+    # i.e. for team to be created empty, both the general config and this setting must permit empty
     team_allow_empty: True
 
 

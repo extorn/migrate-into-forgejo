@@ -76,12 +76,19 @@ class CanonicalOrganizations:
 
 
 @dataclass
-class CanonicalGroupMembership:
+class CanonicalOrganizationMembership:
     """A mapping from Organization to user that is a member"""
-    group_path: str
+    org_username: str
     username: str
-    access_level: int
+    access_level: str
 
+    def get_safe_org_username(self) -> str:
+        """Get Forgejo safe username"""
+        return name_clean(self.org_username)
+
+    def get_safe_username(self) -> str:
+        """Get Forgejo safe username"""
+        return name_clean(self.username)
 
 
 @dataclass
@@ -92,7 +99,7 @@ class CanonicalOrganization:
     full_name:str
     description:str
     members: list[CanonicalUser] = field(default_factory=list)
-    memberships: list[CanonicalGroupMembership] = field(default_factory=list)
+    memberships: list[CanonicalOrganizationMembership] = field(default_factory=list)
 
     def get_safe_username(self) -> str:
         """Get Forgejo safe username"""
