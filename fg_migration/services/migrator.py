@@ -52,7 +52,10 @@ class Migrator:
                            f"source system but missing in the destination system: {missing_roles}."
                            " Please add these roles to the destination system or remove the mapping"
                            " for these roles in the migration configuration and try again.")
-            raise RuntimeError("Migration cannot be run, missing mapped roles in destination system")
+            raise RuntimeError("Migration cannot be run, missing mapped roles"
+                               " in destination system")
+
+
 
     #TODO reenable this code and update it to work (it isn't strictly required,
     #     but someone may find it useful to customise what happens normally in the auto-migrate)
@@ -68,9 +71,14 @@ class Migrator:
     #     """import labels for a repository"""
     #     for label in labels:
     #         if not self.migration_dest.forgejo_label_exists(owner=forgejo_safe_project_owner_name,
-    #              repo=forgejo_safe_project_name, labelname=label.name):  # need this because status 422 returned for conflict, not 409
+    #              repo=forgejo_safe_project_name, labelname=label.name):
+    #             # need this if block because status 422 returned for conflict, not 409
     #             try:
-    #                 self.migration_dest.fg_api.issue.create_label(owner=forgejo_safe_project_owner_name, repo=forgejo_safe_project_name, name=label.name, color=label.color, description=label.description)
+    #                 self.migration_dest.fg_api.issue.create_label(
+    #                                               owner=forgejo_safe_project_owner_name,
+    #                                               repo=forgejo_safe_project_name,
+    #                                               name=label.name, color=label.color,
+    #                                               description=label.description)
     #                 fg_print.info(f"Label {label.name} imported!")
     #             except ConflictError:
     #                 continue # already exists :-)
@@ -78,7 +86,8 @@ class Migrator:
     #                 detail = self.migration_dest._get_exception_detail(e)
     #                 fg_print.error(
     #                     f"Label {label.name} import failed: {detail}",
-    #                     f"Failed to import label {label.name} for project {forgejo_safe_project_name} in Forgejo: {detail}",
+    #                     f"Failed to import label {label.name} for project "
+    #                     f"{forgejo_safe_project_name} in Forgejo: {detail}",
     #                 )
     #                 continue
 
@@ -94,15 +103,22 @@ class Migrator:
     #     forgejo_safe_project_name = name_clean(project_name)
     #     forgejo_safe_project_owner_name = name_clean(project_owner)
     #     try:
-    #       forgejo_milestones = list(self.migration_dest.iter_forgejo_milestones(owner=forgejo_safe_project_owner_name, repo=forgejo_safe_project_name))
+    #       forgejo_milestones = list(self.migration_dest.iter_forgejo_milestones(
+    #                                                   owner=forgejo_safe_project_owner_name,
+    #                                                   repo=forgejo_safe_project_name))
     #     except IterativeFetchError:
     #       pass
     #     for milestone in milestones:
-    #         # Note: forgejo_add_milestone appends to the cached list of forgejo_milestones too for efficiency.
-    #         success = self.migration_dest.forgejo_add_milestone(owner=forgejo_safe_project_owner_name, repo=forgejo_safe_project_name,
-    #                                         forgejo_milestones=forgejo_milestones, title=milestone.title,
-    #                                         description=milestone.description, due_date=milestone.due_date,
-    #                                         state=milestone.state)
+    #         # Note: forgejo_add_milestone appends to the cached list of
+    #         #       forgejo_milestones too for efficiency.
+    #         success = self.migration_dest.forgejo_add_milestone(
+    #                            owner=forgejo_safe_project_owner_name,
+    #                            repo=forgejo_safe_project_name,
+    #                            forgejo_milestones=forgejo_milestones,
+    #                            title=milestone.title,
+    #                            description=milestone.description,
+    #                            due_date=milestone.due_date,
+    #                            state=milestone.state)
     #         if not success:
     #             continue
 
@@ -120,13 +136,20 @@ class Migrator:
 
     #     # reload all existing milestones and labels, needed for assignment in issues
     #     try:
-    #       forgejo_milestones = list(self.migration_dest.iter_forgejo_milestones(owner=forgejo_safe_project_owner, repo=forgejo_safe_project_name))
-    #       forgejo_labels = list(self.migration_dest.iter_forgejo_labels(owner=forgejo_safe_project_owner, repo=forgejo_safe_project_name))
-    #       forgejo_issues = list(self.migration_dest.iter_forgejo_issues(owner=forgejo_safe_project_owner, repo=forgejo_safe_project_name))
+    #       forgejo_milestones = list(self.migration_dest.iter_forgejo_milestones(
+    #                                 owner=forgejo_safe_project_owner,
+    #                                 repo=forgejo_safe_project_name))
+    #       forgejo_labels = list(self.migration_dest.iter_forgejo_labels(
+    #                                 owner=forgejo_safe_project_owner,
+    #                                 repo=forgejo_safe_project_name))
+    #       forgejo_issues = list(self.migration_dest.iter_forgejo_issues(
+    #                                 owner=forgejo_safe_project_owner,
+    #                                 repo=forgejo_safe_project_name))
     #     except IterativeFetchError:
     #       pass
     #     for issue in issues:
-    #         if not self.migration_dest.forgejo_issue_exists(forgejo_issues, repo=forgejo_safe_project_name, issue_title=issue.title):
+    #         if not self.migration_dest.forgejo_issue_exists(forgejo_issues,
+    #                                repo=forgejo_safe_project_name, issue_title=issue.title):
     #             due_date = ""
     #             if issue.due_date is not None:
     #                 due_date = dateutil.parser.parse(issue.due_date).strftime(
@@ -144,30 +167,41 @@ class Migrator:
     #                 assignees.append(name_clean(tmp_assignee["username"]))
 
     #             # Get milestone id for the issue, if milestone is assigned to the issue in GitLab.
-    #             # # We need to get the milestone id for the milestone title from Forgejo, because the
-    #             # milestone id in GitLab is not the same as the milestone id in Forgejo, and we need
-    #             # the milestone id for the assignment of the milestone to the issue in Forgejo.
-    #             # If there is no milestone with the same title in Forgejo, we do not assign a milestone
-    #             # to the issue in Forgejo, because there is no equivalent milestone in Forgejo.
+    #             # # We need to get the milestone id for the milestone title from Forgejo, because
+    #             # the milestone id in GitLab is not the same as the milestone id in Forgejo,
+    #             # and we need the milestone id for the assignment of the milestone to the issue
+    #             # in Forgejo.
+    #             # If there is no milestone with the same title in Forgejo, we do not assign a
+    #             # milestone to the issue in Forgejo, because there is no equivalent milestone in
+    #             # Forgejo.
     #             forgejo_milestoneId = None
     #             missing_milestone = False
     #             if issue.milestone is not None:
-    #                 forgejo_milestoneId = self.migration_dest.find_forgejo_milestone_id_by_title(forgejo_milestones, issue.milestone["title"]) # N.b. gitlab issue so dict
+    #                 forgejo_milestoneId = self.migration_dest.find_forgejo_milestone_id_by_title(
+    #                           forgejo_milestones,
+    #                           issue.milestone["title"]) # N.b. gitlab issue so dict
     #                 if forgejo_milestoneId is None:
-    #                     # if this happens, something went wrong with the milestone import, because the milestone assigned
-    #                     # to the issue in GitLab should have been imported to Forgejo in the milestone import step before
-    #                     # the issue import step, so we print an error and skip the milestone assignment for this issue,
-    #                     # but we continue with the import of the issue without the milestone assignment, because the
-    #                     # existence of the milestone is not a failure for the import of the issue, we just skip the
-    #                     # milestone assignment for this issue and continue with the import of the issue without the
+    #                     # if this happens, something went wrong with the milestone import, because
+    #                     # the milestone assigned to the issue in GitLab should have been imported
+    #                     # to Forgejo in the milestone import step before the issue import step,
+    #                     # so we print an error and skip the milestone assignment for this issue,
+    #                     # but we continue with the import of the issue without the milestone
+    #                     # assignment, because the existence of the milestone is not a failure
+    #                     # for the import of the issue, we just skip the milestone assignment
+    #                     # for this issue and continue with the import of the issue without the
     #                     # milestone assignment.
     #                     fg_print.error(
-    #                         f"Milestone {issue.milestone['title']} assigned to issue {issue.title} does not exist in Forgejo, skipping milestone assignment for this issue!",
-    #                         f"Failed to import issue {issue.title} for project {forgejo_safe_project_name} in Forgejo",
+    #                         f"Milestone {issue.milestone['title']} assigned to "
+    #                         f"issue {issue.title} does not exist in Forgejo, skipping milestone"
+    #                         f" assignment for this issue!",
+    #                         f"Failed to import issue {issue.title} for project "
+    #                         f"{forgejo_safe_project_name} in Forgejo",
     #                     )
     #                     missing_milestone = True
     #             if missing_milestone:
-    #                 continue # stop the import of this issue (to allow milestone import to be fixed and re-run not to create duplicate issues)
+    #                 # stop the import of this issue (to allow milestone import to be fixed
+    #                 # and re-run not to create duplicate issues)
+    #                 continue
 
 
     #             missing_label = False
@@ -181,26 +215,33 @@ class Migrator:
     #                     forgejo_issue_label_ids.append(existing_label.id)
     #                 else:
     #                     fg_print.error(
-    #                         f"Label {label} assigned to issue {issue.title} does not exist in Forgejo, skipping label assignment for this issue!",
+    #                         f"Label {label} assigned to issue {issue.title} does not exist"
+    #                          " in Forgejo, skipping label assignment for this issue!",
     #                         f"Failed to import issue {issue.title} for project {repo} in Forgejo",
     #                     )
     #                     missing_label = True
     #                     break
     #             if missing_label:
-    #                 continue # stop the import of this issue (to allow milestone import to be fixed and re-run not to create duplicate issues)
+    #                 # stop the import of this issue (to allow milestone import to
+    #                 # be fixed and re-run not to create duplicate issues)
+    #                 continue
 
     #             try:
-    #                 self.migration_dest.fg_api.issue.create_issue(owner=forgejo_safe_project_owner, repo=forgejo_safe_project_name,
+    #                 self.migration_dest.fg_api.issue.create_issue(
+    #                                         owner=forgejo_safe_project_owner,
+    #                                         repo=forgejo_safe_project_name,
     #                                         title=issue.title, body=issue.description,
     #                                         assignee=assignee, assignees=assignees,
-    #                                         milestone=forgejo_milestoneId, labels=forgejo_issue_label_ids,
+    #                                         milestone=forgejo_milestoneId,
+    #                                         labels=forgejo_issue_label_ids,
     #                                         due_on=due_date, closed=issue.state == "closed")
     #                 fg_print.info(f"Issue {issue.title} imported!")
     #             except Exception as e:
     #                 detail = self.migration_dest._get_exception_detail(e)
     #                 fg_print.error(
     #                     f"Issue {issue.title} import failed: {detail}"
-    #                     f"Failed to import issue {issue.title} for project {forgejo_safe_project_name} in Forgejo: {detail}",
+    #                     f"Failed to import issue {issue.title} for project"
+    #                     f" {forgejo_safe_project_name} in Forgejo: {detail}",
     #                 )
 
 

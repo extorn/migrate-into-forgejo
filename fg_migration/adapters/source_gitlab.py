@@ -8,8 +8,7 @@ import gitlab.v4 # pylint: disable=no-name-in-module
 import gitlab.v4.objects
 import yaml
 
-from fg_migration.adapters.forgeo_types import IterativeFetchError
-from fg_migration.adapters.gitlab_types import GitLabApiPaginator
+from fg_migration.adapters.gitlab_types import GitLabApiPaginator, IterativeFetchError
 from fg_migration.utils import fg_print
 from fg_migration.adapters.destination_forgjo import ForgejoRepositoryRole
 from fg_migration.core.migration_source_type import MigrationSource
