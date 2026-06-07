@@ -1,7 +1,8 @@
 """Defines the AccessLevelAccessMappingStrategy class"""
+from abc import ABC
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import override
+from typing import cast, override
 
 from pyforgejo import Team
 
@@ -116,14 +117,21 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
         self.migration_config = migration_config
 
     @dataclass
-    class TeamMatchResult:
+    class TeamMatchResult(ABC):
         """Complex type for use when searching for a team to add users to. If a team is
            found but it needs moving out of the way because it has pre-existing different
            set of users to those being imported, renamed team is set and old_name is set
            otherwise matched team is set (i.e. either or)"""
-        matched_team: Team | None = None
-        renamed_team: Team | None = None
-        old_name: str | None = None
+
+    @dataclass
+    class TeamMatchExactResult(TeamMatchResult):
+        """See super type definition"""
+        matched_team: Team | None
+    @dataclass
+    class TeamMatchRenamedResult(TeamMatchResult):
+        """See super type definition"""
+        renamed_team: Team
+        old_name: str
 
 
 
@@ -167,10 +175,6 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
         # STEP 2: materialise Forgejo teams
         # ---------------------------------------------------
 
-        # build a list of all those teams that already exist
-        # once the import of team members is complete
-        existing_team_definitions : set[ForgejoTeamDefinition] = set()
-
         for access_level, memberships in team_intent_map.items():
 
             forgejo_team_definition = self._get_forgejo_team_definition(
@@ -198,27 +202,32 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
 
             if match_result is None:
                 # Something went wrong trying to find existing org team
+                fg_print.error("skipping import of access level due to match failure...")
                 continue
 
-            if match_result.old_name:
+            if isinstance(match_result, self.TeamMatchRenamedResult):
                 # Team was moved, remove old mapping and add a new one
                 del existing_forgejo_org_teams_map[match_result.old_name.lower()]
                 existing_forgejo_org_teams_map[match_result.renamed_team.name.lower()] = \
                                                                     match_result.renamed_team
+                # Now no team matches the name we renamed from
+                existing_team = None
+            else:
+                # cast the class so we get variable checking in development ide.
+                exact_result = cast(AccessLevelAccessMappingStrategy.TeamMatchExactResult,
+                                    match_result)
+                existing_team = exact_result.matched_team
 
-            existing_team = match_result.matched_team
-            is_new_team = False
+            is_new_team = existing_team is None # n.b. we've not yet created the new team
 
-            if existing_team is None:
+            if is_new_team:
+                # Create that required and currently non existent team
                 existing_team = self._safely_add_new_team(organization=organization,
                                                           team_definition=forgejo_team_definition)
                 if existing_team is None:
                     continue
 
-                is_new_team = True
                 existing_forgejo_org_teams_map[existing_team.name.lower()] = existing_team
-
-            existing_team_definitions.add(forgejo_team_definition)
 
             # ---------------------------------------------------
             # STEP 3: attach users (idempotent)
@@ -235,19 +244,15 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
         # STEP 4: add any teams with no members defined in the teams config yaml file.
         # ----------------------------------------------------------------------------
         if self.migration_config.ADD_EMPTY_TEAMS_TO_ORGANIZATIONS:
-
             for possible_team in self.migration_dest.get_default_team_definitions():
-                if possible_team.name in existing_team_definitions:
-                    # created during this operation
-                    continue
                 if possible_team.name.lower() in existing_forgejo_org_teams_map:
                     # already existed before this operation started
                     continue
 
-                if forgejo_team_definition.allow_empty:
+                if possible_team.allow_empty:
                     self.migration_dest.forgejo_add_organization_team(
                         org_name=organization.get_safe_username(),
-                        definition=forgejo_team_definition,
+                        definition=possible_team,
                     )
                 else:
                     fg_print.info(f"Skipped adding empty team {possible_team.name} because"
@@ -264,9 +269,7 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
         )
 
         if existing_team is None:
-            fg_print.warning(
-                f"Failed to create team {team_definition.name}"
-            )
+            fg_print.warning(f"Failed to create team {team_definition.name}")
             return None
 
         if not existing_team.name:
@@ -431,8 +434,9 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
                     ):
                         # Only add usernames if successfully added team.
                         affected_usernames = member_usernames.difference(all_team_usernames)
-                        fg_print.warning("Team addition with Users failed. These users will"
-                                         " not be added as individual members instead. "
+                        fg_print.warning("Team attachment failed. Users represented by this team"
+                                         "will not be imported as individual collaborators because"
+                                         "doing so would alter the intended authorization model"
                                          f"Affected users: {affected_usernames}")
 
                     # Mark users as accounted for by team intent.
@@ -446,6 +450,25 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
                 )
                 return
 
+        self.handle_missing_accessors(
+                    migration_source=migration_source,
+                    source_repo=source_repo,
+                    repo_accessors=repo_accessors,
+                    all_team_usernames=all_team_usernames,
+                    existing_collaborator_ids=existing_collaborator_ids,
+                )
+
+
+
+    def handle_missing_accessors(
+        self,
+        migration_source: MigrationSource,
+        source_repo: CanonicalRepo,
+        repo_accessors: CanonicalRepoMemberships,
+        all_team_usernames: set[str],
+        existing_collaborator_ids: set[int],
+    ):
+        """Handle all those accessors not already added by way of membership to a Forgejo Team"""
         # ---------------------------------------------------
         # STEP 3: individual collaborators (true fallback path)
         # ---------------------------------------------------
@@ -551,7 +574,7 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
 
         matched_team = self._find_matching_team(existing_forgejo_teams_map, forgejo_team_definition)
         if matched_team is None:
-            return self.TeamMatchResult(matched_team=None)
+            return self.TeamMatchExactResult(matched_team=None)
 
         try:
             existing_usernames = {member.login
@@ -570,24 +593,23 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
                           " so reusing.\n"
                           f"Affected Forgejo Organization {organization.get_safe_username()}"
                           f" Team {matched_team.name}")
-            return self.TeamMatchResult(matched_team=matched_team)
+            return self.TeamMatchExactResult(matched_team=matched_team)
 
         if self.migration_config.USE_EXISTING_TEAMS:
             fg_print.warning("Pre-existing team users will be granted access to new repositories"
                              " that are created with access granted to this team.\n"
                              f"Affected Forgejo Organization {organization.get_safe_username()}"
                              f" Team {matched_team.name}, usernames: {existing_usernames}")
-            return self.TeamMatchResult(matched_team=matched_team)
+            return self.TeamMatchExactResult(matched_team=matched_team)
 
         result = self._rename_team_out_of_the_way(team = matched_team)
-
 
         return result
 
 
     def _rename_team_out_of_the_way(self,
                                     team: Team,
-                                    ) -> TeamMatchResult:
+                                    ) -> TeamMatchRenamedResult | None:
 
         current_definition = ForgejoTeamDefinition.from_team(
             team=team,
@@ -615,9 +637,10 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
                            "creation of new team with the same name for import.")
 
         if updated_team is not None:
-            return self.TeamMatchResult(renamed_team=updated_team, old_name=team.name)
+            return self.TeamMatchRenamedResult(renamed_team=updated_team, old_name=team.name)
 
-        return self.TeamMatchResult(matched_team=team)
+        # return self.TeamMatchExactResult(matched_team=team)
+        return None # Team does exist, but we clearly didn't want to use it
 
 
 
