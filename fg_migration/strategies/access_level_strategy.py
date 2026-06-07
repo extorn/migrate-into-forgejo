@@ -30,11 +30,77 @@ class AccessLevelAccessMappingStrategy(AccessMappingStrategy):
     corresponding Forgejo team, and repository access is granted through those
     teams whenever possible.
 
+    Example
+    -------
+    Source system organization memberships:
+
+        alice   -> Maintainer
+        bob     -> Maintainer
+        charlie -> Developer
+        dave    -> Guest
+
+    Team mappings:
+
+        Maintainer -> forgejo-maintainers
+        Developer  -> forgejo-developers
+        Guest      -> forgejo-guests
+        Auditor    -> forgejo-auditors
+
+    Resulting Forgejo organization structure:
+
+        forgejo-maintainers
+            ├── alice
+            └── bob
+
+        forgejo-developers
+            └── charlie
+
+        forgejo-guests
+            └── dave
+
+        forgejo-auditors
+            └── <no members>
+
+    The empty "forgejo-auditors" team may still be created when
+    ADD_EMPTY_TEAMS_TO_ORGANIZATIONS is enabled and the team definition
+    allows empty teams.
+
+    Repository access example
+    -------------------------
+    If repository "project-a" is accessible to all four users in the source
+    system, the strategy will preferentially grant repository access through
+    teams:
+
+        project-a
+            ├── forgejo-maintainers
+            ├── forgejo-developers
+            └── forgejo-guests
+
+    rather than creating individual repository collaborators.
+
+    Empty teams can also be attached to repositories when
+    ADD_EMPTY_TEAMS_TO_REPOSITORIES is enabled:
+
+        project-a
+            ├── forgejo-maintainers
+            ├── forgejo-developers
+            ├── forgejo-guests
+            └── forgejo-auditors (0 members)
+
+    This allows predefined permission structures to exist in Forgejo even when
+    no users currently occupy a given role.
+
+    Direct collaborators are only used as a fallback when a user cannot be
+    represented through a team-based access mapping.
+
     Behaviour:
     - Creates or reuses Forgejo teams mapped from source access levels.
+    - Optionally creates configured empty teams even when no source users map
+      to them.
     - Imports organization membership by assigning users to the appropriate
       access-level team.
     - Grants repository access through teams for organization-owned repositories.
+    - Optionally grants repository access to empty teams.
     - Falls back to direct repository collaborators only for users not covered
       by team-based access.
     - Supports fuzzy role/team mapping when enabled by migration configuration.

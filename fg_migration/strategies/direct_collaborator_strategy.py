@@ -18,14 +18,67 @@ from fg_migration.utils import fg_print
 
 class DirectCollaboratorOnlyStrategy(AccessMappingStrategy):
     """
-    Strategy that bypasses all access-level team modelling and assigns
-    repository access directly to users.
+        Strategy that bypasses all access-level team modelling and assigns
+        repository access directly to users.
 
-    Important constraint:
-    - The Forgejo owner team is still assumed to exist (mandatory platform requirement)
-    - This strategy does NOT create or manage any additional teams beyond that
-    - All non-owner access is handled via direct repository collaborators
-    """
+        This strategy treats repository memberships as the canonical representation
+        of authorization and does not attempt to group users into Forgejo teams.
+        Each repository accessor is imported as an individual collaborator with the
+        closest matching Forgejo permission.
+
+        Example
+        -------
+        Given source-system membership data:
+
+            alice   -> Maintainer
+            bob     -> Maintainer
+            charlie -> Developer
+            dave    -> Guest
+
+        and a configured role mapping:
+
+            Maintainer -> admin
+            Developer  -> write
+            Guest      -> read
+            Auditor    -> read
+
+        Unlike team-based strategies, no additional Forgejo teams are created:
+
+            Forgejo Organization
+                └── Owner Team (platform required)
+
+        The following potential team structure is intentionally NOT created:
+
+            forgejo-maintainers
+            forgejo-developers
+            forgejo-guests
+            forgejo-auditors
+
+        For repository "project-a", access is granted directly to users:
+
+            project-a
+                ├── alice   (admin)
+                ├── bob     (admin)
+                ├── charlie (write)
+                └── dave    (read)
+
+        Even if an access level exists in configuration but has no users:
+
+            Auditor -> read
+
+        no Forgejo team is created and no repository team assignment is made.
+
+        Behaviour:
+        - Does not create access-level Forgejo teams.
+        - Does not manage team membership.
+        - Does not attach teams to repositories.
+        - Imports all repository accessors as direct collaborators.
+        - Maps source access levels directly to Forgejo permissions.
+        - Requires only the mandatory Forgejo owner team.
+        - Ignores empty team definitions because no team modelling is performed.
+        - Suitable for migrations where preserving repository access is important
+        but reproducing the source-system team structure is not.
+        """
 
     migration_dest:ForgejoDestination
     migration_config:MigrationConfig

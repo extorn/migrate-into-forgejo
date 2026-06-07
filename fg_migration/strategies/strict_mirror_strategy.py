@@ -13,19 +13,88 @@ from fg_migration.utils import fg_print
 
 class StrictMirrorAccessMappingStrategy(AccessMappingStrategy):
     """
-    Strict 1:1 mirror of source system access structures.
+        Strict 1:1 mirror of source system access structures.
 
-    This strategy enforces exact replication of:
-    - Source groups → Forgejo teams (1:1)
-    - Group membership → team membership (exact)
-    - Repository access → only via mapped teams (no direct fallback users)
+        This strategy preserves the source-system authorization model as closely as
+        possible. Source groups become Forgejo teams, group membership becomes team
+        membership, and repository access is granted only through those teams.
 
-    Design principles:
-    - No fuzzy mapping
-    - No role collapsing
-    - No fallback to direct collaborators
-    - Fail-fast on structural mismatch
-    """
+        Example
+        -------
+        Given source-system groups:
+
+            Maintainers
+                ├── alice
+                └── bob
+
+            Developers
+                └── charlie
+
+            Guests
+                └── dave
+
+            Auditors
+                └── <no members>
+
+        the following Forgejo organization structure is created:
+
+            Maintainers
+                ├── alice
+                └── bob
+
+            Developers
+                └── charlie
+
+            Guests
+                └── dave
+
+            Auditors
+                └── <no members>
+
+        For repository "project-a", access is granted only through teams:
+
+            project-a
+                ├── Maintainers
+                ├── Developers
+                ├── Guests
+                └── Auditors
+
+        No direct collaborators are created.
+
+        Strict enforcement
+        ------------------
+        If a source group contains users not present in the corresponding Forgejo
+        team, the mismatch is reported rather than silently ignored.
+
+        For example, if the source system defines:
+
+            Developers
+                └── charlie
+
+        but the Forgejo team contains:
+
+            Developers
+                ├── charlie
+                └── eve
+
+        a team membership mismatch is detected and reported.
+
+        Similarly, if a repository accessor cannot be represented by one of the
+        mapped teams, the strategy reports a strict mirror violation rather than
+        falling back to creating an individual collaborator.
+
+        Behaviour:
+        - Creates a Forgejo team for every source-system group.
+        - Preserves source group names when creating Forgejo teams.
+        - Enforces team membership to match source-group membership.
+        - Grants repository access only through teams.
+        - Never creates direct repository collaborators as a fallback.
+        - Preserves empty groups as empty Forgejo teams.
+        - Uses exact mappings only; no fuzzy matching or role approximation.
+        - Reports structural mismatches instead of automatically correcting them.
+        - Intended for migrations where reproducing the source authorization model
+        is more important than maximizing migration completion.
+        """
 
     def __init__(self, migration_dest):
         self.migration_dest = migration_dest
