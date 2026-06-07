@@ -3,7 +3,6 @@ from typing import override
 
 from pyforgejo import Team
 
-from fg_migration.strategies.access_mapping_strategy import BaseAccessMappingStrategy
 from fg_migration.core.canonical_types import (
     CanonicalOrganization,
     CanonicalRepo,
@@ -11,6 +10,7 @@ from fg_migration.core.canonical_types import (
 )
 from fg_migration.adapters.forgeo_types import IterativeFetchError
 from fg_migration.core.migration_source_type import MigrationSource
+from fg_migration.strategies.base_access_mapping_strategy import BaseAccessMappingStrategy
 from fg_migration.utils import fg_print
 
 
@@ -95,7 +95,7 @@ class DirectCollaboratorOnlyStrategy(BaseAccessMappingStrategy):
         organization: CanonicalOrganization,
         usernames: set[str],
         dest_team: Team,
-        team_members_cache: dict[int, set[str]],
+        team_members_cache: dict[int, set[str]], # map[Team.id -> {member.username}]
         is_new_team: bool,
     ):
         return

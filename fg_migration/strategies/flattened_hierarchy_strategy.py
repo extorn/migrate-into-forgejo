@@ -2,11 +2,7 @@
 from typing import override
 from warnings import deprecated
 
-from pyforgejo import Team
 
-from fg_migration.adapters.destination_forgjo import ForgejoDestination
-from fg_migration.core.config_types import MigrationConfig
-from fg_migration.strategies.access_mapping_strategy import AccessMappingStrategy
 from fg_migration.core.canonical_types import (
     CanonicalOrganization,
     CanonicalRepo,
@@ -14,11 +10,12 @@ from fg_migration.core.canonical_types import (
 )
 from fg_migration.adapters.forgeo_types import IterativeFetchError
 from fg_migration.core.migration_source_type import MigrationSource
+from fg_migration.strategies.base_access_mapping_strategy import BaseAccessMappingStrategy
 from fg_migration.utils import fg_print
 
 
 @deprecated("Not Implemented")
-class FlattenedHierarchyStrategy(AccessMappingStrategy):
+class FlattenedHierarchyStrategy(BaseAccessMappingStrategy):
     """
 Access mapping strategy that derives Forgejo teams from source-system
 group hierarchies rather than access levels.
@@ -104,13 +101,6 @@ Behaviour:
   structures should be preserved despite Forgejo lacking nested teams.
 """
 
-    migration_dest:ForgejoDestination
-    migration_config:MigrationConfig
-
-    def __init__(self, migration_dest:ForgejoDestination, migration_config:MigrationConfig):
-        self.migration_dest = migration_dest
-        self.migration_config = migration_config
-        raise RuntimeError("Not Implemented yet")
 
     # ---------------------------------------------------------
     # Teams: explicitly disabled except for required owner team
@@ -123,16 +113,7 @@ Behaviour:
         )
         return
 
-    @override
-    def import_team_users_from_usernames(
-        self,
-        organization: CanonicalOrganization,
-        usernames: set[str],
-        dest_team: Team,
-        team_members_cache: dict[int, set[str]],
-        is_new_team: bool,
-    ):
-        return
+
 
     # ---------------------------------------------------------
     # Repository access: direct users only

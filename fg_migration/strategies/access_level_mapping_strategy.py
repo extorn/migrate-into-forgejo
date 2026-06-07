@@ -6,8 +6,8 @@ from typing import override
 
 from pyforgejo import Team
 
+from fg_migration.strategies.base_access_mapping_strategy import BaseAccessMappingStrategy
 from fg_migration.utils import fg_print
-from fg_migration.strategies.access_mapping_strategy import BaseAccessMappingStrategy
 from fg_migration.core.canonical_types import (CanonicalOrganizationMembership,
                                                CanonicalOrganization,
                                                CanonicalRepo, CanonicalRepoMemberships,
@@ -310,23 +310,6 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
             return None
         return existing_team
 
-
-    @override
-    def import_team_users_from_usernames(
-            self,
-            organization: CanonicalOrganization,
-            usernames: set[str],
-            dest_team: Team,
-            team_members_cache: dict[int, set[str]], # map[Team.id -> {member.username}]
-            is_new_team: bool,
-        ):
-        self.migration_dest.import_team_users_from_usernames(
-                organization=organization,
-                usernames=usernames,
-                dest_team=dest_team,
-                team_members_cache=team_members_cache,
-                is_new_team=is_new_team,
-            )
 
 
     @override
