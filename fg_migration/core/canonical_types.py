@@ -121,9 +121,16 @@ class CanonicalRepoOwner:
 # frozen permits its use in sets, and I can think of no good reason to ever alter the contents.
 @dataclass(frozen=True)
 class CanonicalRepoMembership:
-    """Mapping between repository and user with access including the permission they have there"""
+    """Mapping between repository and user with access including the permission they have there.
+       Hierarchy can be used to store path in the source system to the member, for example
+       in GitLab it might be set for a descendant group to <group>/:d:/<group><group>
+       or for a sub group to <group>/:s:/<group>
+       This could then be parsed when creating teams to build compound team names such as
+       org/team-d-descendant-descendant or org/team-s-sub for example, thus flattening a deep
+       nested team / group structure in the source system."""
     username:str
     repository:CanonicalRepo
+    hierarchy:str|None
     access_level:str
 
     def get_safe_username(self) -> str:

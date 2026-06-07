@@ -107,6 +107,33 @@ class GitLabMigrationSource(MigrationSource):
 
 
 
+    def _iter_all_sub_groups_of_group(self, group:
+                                   gitlab.v4.objects.Group
+                                   ) -> Iterator[gitlab.v4.objects.GroupSubgroup]:
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="SubGroups")
+        return paginator.iterate(fetch_page_from_api=
+            lambda gl_api, page, limit: group.subgroups.list(
+                page=page,
+                per_page=limit,
+            )
+        )
+
+
+
+    def _iter_all_descendant_groups_of_group(self, group:
+                                   gitlab.v4.objects.Group
+                                   ) -> Iterator[gitlab.v4.objects.GroupDescendantGroup]:
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50,
+                                       items_type="DescendantGroups")
+        return paginator.iterate(fetch_page_from_api=
+            lambda gl_api, page, limit: group.descendant_groups.list(
+                page=page,
+                per_page=limit,
+            )
+        )
+
+
+
     def _iter_all_members_of_group(self, group:
                                    gitlab.v4.objects.Group
                                    ) -> Iterator[gitlab.v4.objects.GroupMember]:
@@ -340,35 +367,87 @@ class GitLabMigrationSource(MigrationSource):
         # ancestor_groups = project.groups.list(get_all=True)
         # group_ids = [anc.get_id() for anc in self._iter_all_groups_of_project(project)]
         try:
+            path_to_group = ""
             for group in self._iter_all_groups_of_project(project):
-                group_id = group.get_id()
-                # retrieve the full group object so we can get the members.
-                group = self.gitlab_api.groups.get(group_id)
-                fg_print.debug(f"Loading inherited users from owner group {group_id}")
-                # For every user that has access to this group
-                try:
-                    for group_member in self._iter_all_members_of_group(group=group):
-                        if self._is_ignore_gitlab_user(group_member.username):
-                            if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
-                                fg_print.warning(f"Ignored a GitLab specific system user "
-                                                 f"{group_member.username}. If this is incorrect"
-                                                 ", rerun import permitting system user cloning")
-                                continue
-                            else:
-                                fg_print.warning(f"Likely a GitLab specific system user "
-                                                 f"{group_member.username}. "
-                                                 "Can possibly be deleted after import!")
-                        repo_accessors_members.append(CanonicalRepoMembership(
-                                                        username = group_member.username,
-                                                        repository = repository,
-                                                        access_level = group_member.access_level))
-                except IterativeFetchError:
-                    fg_print.error(f"Failed to load all Group Members for Group {group.name}."
-                                   " Import will need to be run again for Repository Accessors")
+                # add all repo_accessors for this group
+                repo_accessors_members += self._process_group(repository=repository,
+                                                              group=group,
+                                                              parent_path=path_to_group,
+                                                              depth=1)
+
         except IterativeFetchError:
             fg_print.error(f"Failed to load all Groups for Project {project.path}."
                            " Import will need to be run again for Repository Accessors")
         return repo_accessors_members
+
+
+    def _process_group(self, repository : CanonicalRepo,
+                       group:gitlab.v4.objects.Group,
+                       parent_path:str,
+                       depth:int) -> list[CanonicalRepoMembership]:
+        """A recursive trawler of groups, descendant and sub groups"""
+        group_id = group.get_id()
+        repo_accessors_members : list[CanonicalRepoMembership] = []
+        # retrieve the full group object so we can get the members.
+        group = self.gitlab_api.groups.get(group_id)
+        path_to_group = parent_path+"/"+group.path
+        fg_print.debug(f"Loading inherited users from owner group {group_id}")
+        # For every user that has access to this group
+        try:
+            for group_member in self._iter_all_members_of_group(group=group):
+                if self._is_ignore_gitlab_user(group_member.username):
+                    if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
+                        fg_print.warning(f"Ignored a GitLab specific system user "
+                                            f"{group_member.username}. If this is incorrect"
+                                            ", rerun import permitting system user cloning")
+                        continue
+                    else:
+                        fg_print.warning(f"Likely a GitLab specific system user "
+                                            f"{group_member.username}. "
+                                            "Can possibly be deleted after import!")
+
+                #TODO member roles are not parsed at all. This information is lost
+
+                repo_accessors_members.append(CanonicalRepoMembership(
+                                                username = group_member.username,
+                                                repository = repository,
+                                                hierarchy=path_to_group,
+                                                access_level = group_member.access_level))
+
+            if depth <= self.gitlab_config.MAX_DESCENDANT_GROUP_DEPTH:
+                new_depth = depth + 1
+                path_to_descendant_group = path_to_group
+                if depth == 1:
+                    # just an idea to distinguish child group path types
+                    path_to_descendant_group += ":d:/"
+
+                for descendant_group in self._iter_all_descendant_groups_of_group(group=group):
+                    descendant_group_id = descendant_group.get_id()
+                    descendant_group = self.gitlab_api.groups.get(descendant_group_id)
+                    repo_accessors_members += self._process_group(
+                                                        repository=repository,
+                                                        group=descendant_group,
+                                                        parent_path=path_to_descendant_group,
+                                                        depth=new_depth)
+            if depth <= self.gitlab_config.MAX_SUB_GROUP_DEPTH:
+                new_depth = depth + 1
+                path_to_sub_group = path_to_group
+                if depth == 1:
+                    # just an idea to distinguish child group path types
+                    path_to_sub_group += ":s:/"
+
+                for sub_group in self._iter_all_sub_groups_of_group(group=group):
+                    sub_group_id = sub_group.get_id()
+                    sub_group = self.gitlab_api.groups.get(sub_group_id)
+                    repo_accessors_members += self._process_group(
+                                                        repository=repository,
+                                                        group=sub_group,
+                                                        parent_path=path_to_sub_group,
+                                                        depth=new_depth)
+
+        except IterativeFetchError:
+            fg_print.error(f"Failed to load all Group Members for Group {group.name}."
+                            " Import will need to be run again for Repository Accessors")
 
 
 
@@ -399,6 +478,7 @@ class GitLabMigrationSource(MigrationSource):
                 repo_accessors_members.append(CanonicalRepoMembership(
                                                         username = project_member.username,
                                                         repository =repository,
+                                                        hierarchy=None,
                                                         access_level = project_member.access_level))
         except IterativeFetchError:
             fg_print.error(f"Failed to load all Project Members for Project {project.path}."
