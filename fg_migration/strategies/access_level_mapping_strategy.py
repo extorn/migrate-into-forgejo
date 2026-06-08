@@ -358,6 +358,10 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
 
         all_team_usernames: set[str] = set()
 
+        if source_repo.is_individual:
+            # add the owner (these usernames will NOT be turned into collaborators)
+            all_team_usernames.add(source_repo.get_safe_owner_name())
+
         # ---------------------------------------------------
         # STEP 2: attach teams (only if repo is org-owned)
         # ---------------------------------------------------
@@ -398,7 +402,7 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
                                         role_builder=self.migration_dest.forgejo_team_to_role_mapper,
                                         require_exact=True)
 
-                    if current_team_def.permissions.permission == ForgejoPermission.OWNER:
+                    if remove_self and current_team_def.permissions.permission == ForgejoPermission.OWNER:
                         fg_print.debug(f"Removing migration user from team {org_team.name}")
                         self.migration_dest.forgejo_remove_user_from_organization_team(
                                                 username=migration_username,
