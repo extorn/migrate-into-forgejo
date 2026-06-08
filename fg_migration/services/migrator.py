@@ -422,8 +422,10 @@ class Migrator:
             #       updated to their new temporary password
             # NOTE: we set the must_change_password to False if we need to upload an avatar
             has_avatar = user.avatar_url is not None
-            is_in_forgejo = self.migration_dest.forgejo_add_user(user=user, notify=notify,
-                                                                 must_change_password=(not has_avatar))
+            is_in_forgejo = self.migration_dest.forgejo_add_user(
+                                                        user=user,
+                                                        notify=notify,
+                                                        must_change_password=not has_avatar)
             if not is_in_forgejo:
                 # something went wrong with the user import. can't do any more for this user.
                 continue
@@ -444,7 +446,7 @@ class Migrator:
                     fg_print.info(f"Imported avatar for user {user.username}")
                     session.close()
                     #NOTE: now update force user to change password on next login
-                    self.migration_dest.forgejo_force_password_change(username=user)
+                    self.migration_dest.forgejo_force_password_change(user=user)
 
                 except requests.RequestException as ex:
                     fg_print.error(
@@ -454,9 +456,9 @@ class Migrator:
             # import public keys if possible
             self._import_user_keys(user=user)
 
-            # Now print all the newly created users details (so they can be
-            #  copied and pasted as needed into a spreadsheet perhaps)
-            self._list_user_details(users=users)
+        # Now print all the newly created users details (so they can be
+        #  copied and pasted as needed into a spreadsheet perhaps)
+        self._list_user_details(users=users)
 
 
 
