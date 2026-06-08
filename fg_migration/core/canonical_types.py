@@ -95,6 +95,7 @@ class CanonicalOrganizationMembership:
 @dataclass
 class CanonicalOrganization:
     """Owner of repositories and teams"""
+    source_system:str
     source_type:str # what is this type defined as at source e.g. for gitlab, Group
     username: str
     full_name:str

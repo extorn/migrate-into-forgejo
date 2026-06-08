@@ -426,7 +426,7 @@ class Migrator:
                 continue
 
             if user.avatar_url is not None:
-                if user.password is not None:
+                if user.password is None:
                     # Password will be none in event the user already exists. We can't help that.
                     fg_print.error(f"Unable to import avatar for user {user.username}"
                                    f" as this is only possible for newly created users")
@@ -436,7 +436,7 @@ class Migrator:
                     session = requests.Session()
                     session.auth = (user.username, user.password)
                     avatar_b64 = self._image_url_to_base64(user.avatar_url)
-                    url = f"{ForgejoApiBuilder.config.FORGEJO_API_URL}/user/avatar"
+                    url = f"{self.fg_api_builder.config.FORGEJO_API_URL}/user/avatar"
                     response = session.post(url = url, json={"image": avatar_b64})
                     response.raise_for_status()
                 except requests.RequestException as ex:
@@ -470,9 +470,9 @@ class Migrator:
 
         for user in users:
             fg_print.warning(
-                f"{user.username:<{username_w}}  "
-                f"{user.password:<{password_w}}  "
-                f"{user.email:<{email_w}}  "
+                f"{(user.username or ''):<{username_w}}  "
+                f"{(user.password or ''):<{password_w}}  "
+                f"{(user.email or ''):<{email_w}}  "
                 f"{user.full_name}"
             )
 

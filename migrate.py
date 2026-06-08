@@ -108,7 +108,7 @@ def main():
         migrator.import_organizations()
     # IMPORT Repositories (Projects) AND OR Collaborators (Memberships of Projects)
     if args["projects"] or args["membership"] or args["all"]:
-        migrator.import_repos(import_repo_content=args["projects"])
+        migrator.import_repos(import_repo_content=(args["projects"] or args["all"]))
     # IMPORT NOTHING ?
     if (
         not args["users"]

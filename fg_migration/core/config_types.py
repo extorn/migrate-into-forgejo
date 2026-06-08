@@ -69,7 +69,7 @@ class ForgejoConfig:
             FORGEJO_CLIENT_AUTH_KEY = config.get(section, option="forgejo_client_auth_key",
                                                  fallback=None),
             FORGEJO_URL = forgejo_website_url,
-            FORGEJO_API_URL = f"{forgejo_website_url}/api/v1",
+            FORGEJO_API_URL = f"{forgejo_website_url.rstrip('/')}/api/v1",
             FORGEJO_API_TOKEN = config.get(section, option="forgejo_token"),
         )
 

@@ -80,7 +80,7 @@ class ForgejoDestination:
             role = ForgejoRepositoryRole(role_id)
 
             # Trim whitespace on cfg values just in case with strip()
-            cfg_permission = ForgejoPermission[role_cfg.get("permission", "").strip()]
+            cfg_permission = ForgejoPermission(role_cfg.get("permission", "").strip())
             permissions = ForgejoRolePermissionDefinition(
                 role=role,
                 can_create_org_repo=role_cfg.get("can_create_org_repo", False),
@@ -273,15 +273,15 @@ class ForgejoDestination:
         try:
             #fg_print.debug(f"Trying to load forgejo organization {possible_org} "
             #               f"for gitlab project {project.name}...")
-            org = self.fg_api.organization.org_get(org.get_safe_username())
-            fg_print.debug(f"Loaded organization {org.full_name} for {org.source_system}"
-                           f" {org.source_type} {org.name}!")
-            return org
+            forgejo_org = self.fg_api.organization.org_get(org.get_safe_username())
+            fg_print.debug(f"Loaded organization {forgejo_org.username} ({forgejo_org.full_name}) matching {org.source_system}"
+                           f" {org.source_type} {org.username}!")
+            return forgejo_org
         except (NotFoundError, ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(f"Failed to retrieve forgejo organization {org.get_safe_username()}"
-                           f" for repo {org.get_safe_username()} using {org.source_system}"
-                           f" {org.source_type} {org.name}! {detail}")
+                           f" for repo {org.get_safe_username()} matching {org.source_system}"
+                           f" {org.source_type} {org.username}! {detail}")
         return None
 
 

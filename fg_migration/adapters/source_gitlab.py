@@ -365,11 +365,10 @@ class GitLabMigrationSource(MigrationSource):
            group in the hierarchy to which the project belongs"""
 
         repo_accessors_members : list[CanonicalRepoMembership] = []
-        # ancestor_groups = project.groups.list(get_all=True)
-        # group_ids = [anc.get_id() for anc in self._iter_all_groups_of_project(project)]
         try:
             for group in self._iter_all_groups_of_project(project):
-                # add all repo_accessors for this group
+                # retrieve the full group object so we can get the members.
+                group = self.gitlab_api.groups.get(group.get_id())
                 root_hierarchy = [HierarchyNode(name=group.path)]
                 repo_accessors_members += self._process_group(repository=repository,
                                                               group=group,
@@ -442,6 +441,7 @@ class GitLabMigrationSource(MigrationSource):
         except IterativeFetchError:
             fg_print.error(f"Failed to load all Group Members for Group {group.name}."
                             " Import will need to be run again for Repository Accessors")
+        return repo_accessors_members
 
 
 
@@ -477,6 +477,7 @@ class GitLabMigrationSource(MigrationSource):
         except IterativeFetchError:
             fg_print.error(f"Failed to load all Project Members for Project {project.path}."
                            " Import will need to be run again for Repository Accessors")
+        # always return what we have.
         return repo_accessors_members
 
 
@@ -548,6 +549,7 @@ class GitLabMigrationSource(MigrationSource):
             return None
 
         this_org = CanonicalOrganization(
+            source_system=self.source_system,
             source_type="Group",
             username=group.path,
             full_name=group.full_name,
