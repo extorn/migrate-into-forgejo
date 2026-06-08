@@ -1,7 +1,7 @@
 """Contains the ForgejoPurger class"""
 import os
 
-from pyforgejo import PyforgejoApi
+from pyforgejo import Organization, PyforgejoApi, User
 from pyforgejo.core import ApiError
 from requests import RequestException
 
@@ -23,7 +23,7 @@ class ForgejoPurger:
 
     def close(self) -> None:
         """tidy up the API"""
-        self.forgejo_api.close()
+        #self.forgejo_api.close()
 
 
 
@@ -47,25 +47,32 @@ class ForgejoPurger:
         """Delete all repositories in all organizations"""
 
         while True:
-            orgs = self.forgejo_api.organization.org_get_all(page)
+            orgs = self.forgejo_api.organization.org_get_all(page=page)
+            page+=1
             if len(orgs) == 0:
                 break
             for org in orgs:
-                while True:
-                    repos = self.forgejo_api.repository.repo_get_all(org_name=org.username,
-                                                                     page=page)
-                    if len(repos) == 0:
-                        break
-                    for repo in repos:
-                        try:
-                            self.forgejo_api.repository.repo_delete(org_name=org.username,
-                                                                    repo_name=repo.name)
-                            fg_print.info(f"Repository {repo.name} deleted on Forgejo"
-                                          f" for {org.username}")
-                        except (ApiError, RequestException) as e:
-                            detail = self._get_exception_detail(e)
-                            fg_print.error(f"Error deleting repository {repo.name}"
-                                           f" on Forgejo for {org.username}: {detail}")
+                self.delete_all_repos_for_org(org=org)
+
+
+    def delete_all_repos_for_org(self, org:Organization, page:int=1):
+        """delete all repositories for organization"""
+        while True:
+            repos = self.forgejo_api.organization.org_list_repos(org=org.username,
+                                                                 page=page)
+            page+=1
+            if len(repos) == 0:
+                break
+            for repo in repos:
+                try:
+                    self.forgejo_api.repository.repo_delete(owner=org.username,
+                                                            repo=repo.name)
+                    fg_print.info(f"Repository {repo.name} deleted on Forgejo"
+                                    f" for {org.username}")
+                except (ApiError, RequestException) as e:
+                    detail = self._get_exception_detail(e)
+                    fg_print.error(f"Error deleting repository {repo.name}"
+                                    f" on Forgejo for {org.username}: {detail}")
 
 
 
@@ -73,12 +80,13 @@ class ForgejoPurger:
         """Delete all organizations"""
 
         while True:
-            orgs = self.forgejo_api.organization.org_get_all(page)
+            orgs = self.forgejo_api.organization.org_get_all(page=page)
+            page+=1
             if len(orgs) == 0:
                 break
             for org in orgs:
                 try:
-                    self.forgejo_api.organization.org_delete(org_name=org.username)
+                    self.forgejo_api.organization.org_delete(org=org.username)
                     fg_print.info(f"Organization {org.username} deleted on Forgejo")
                 except (ApiError, RequestException) as e:
                     detail = self._get_exception_detail(e)
@@ -90,22 +98,30 @@ class ForgejoPurger:
         """Delete all user repositories"""
         while True:
             users = self.forgejo_api.admin.search_users(page)
+            page+=1
             if len(users) == 0:
                 break
             for user in users:
-                while True:
-                    repos = self.forgejo_api.user.list_repos(username=user.login, page=page)
-                    user = self.forgejo_api.user.get_current()
-                    for repo in repos:
-                        try:
-                            self.forgejo_api.repository.repo_delete(org_name=user.login,
-                                                                    repo_name=repo.name)
-                            fg_print.info(f"Repository {repo.name} deleted "
-                                          f"on Forgejo for {user.login}")
-                        except (ApiError, RequestException) as e:
-                            detail = self._get_exception_detail(e)
-                            fg_print.error(f"Error deleting repository {repo.name}"
-                                           f" on Forgejo for {user.login}: {detail}")
+                self.del_all_repos_for_user(user=user)
+
+
+    def del_all_repos_for_user(self, user:User, page:int=1):
+        """Delete all repos for user"""
+
+        while True:
+            repos = self.forgejo_api.user.list_repos(username=user.login, page=page)
+            page+=1
+            user = self.forgejo_api.user.get_current()
+            for repo in repos:
+                try:
+                    self.forgejo_api.repository.repo_delete(owner=user.login,
+                                                            repo=repo.name)
+                    fg_print.info(f"Repository {repo.name} deleted "
+                                    f"on Forgejo for {user.login}")
+                except (ApiError, RequestException) as e:
+                    detail = self._get_exception_detail(e)
+                    fg_print.error(f"Error deleting repository {repo.name}"
+                                    f" on Forgejo for {user.login}: {detail}")
 
 
 
@@ -114,6 +130,7 @@ class ForgejoPurger:
 
         while True:
             repos = self.forgejo_api.user.current_list_repos(page=page)
+            page+=1
             user = self.forgejo_api.user.get_current()
             for repo in repos:
                 try:
@@ -127,17 +144,18 @@ class ForgejoPurger:
 
 
 
-    def del_users(self, purge: str, page: int=1) -> None:
+    def del_users(self, purge: bool, page:int=1) -> None:
         """Delete all users"""
         while True:
-            users = self.forgejo_api.admin.search_users(page)
+            users = self.forgejo_api.admin.search_users(page=page)
+            page+=1
             if len(users) == 0:
                 break
             for user in users:
-                while True:
-                    try:
-                        self.forgejo_api.admin.delete_user(username=user.login, purge=purge)
-                        fg_print.info(f"User {user.login} deleted on Forgejo")
-                    except (ApiError, RequestException) as e:
-                        detail = self._get_exception_detail(e)
-                        fg_print.error(f"Error deleting user {user.login} on Forgejo: {detail}")
+                try:
+                    self.forgejo_api.admin.delete_user(username=user.login, purge=purge)
+                    fg_print.info(f"User {user.login} deleted on Forgejo")
+                except (ApiError, RequestException) as e:
+                    detail = self._get_exception_detail(e)
+                    fg_print.error(f"Error deleting user {user.login} on Forgejo: {detail}")
+

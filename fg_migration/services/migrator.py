@@ -317,7 +317,7 @@ class Migrator:
             return
 
 
-        if not self.migration_dest.forgejo_repo_exists(owner_username=forgejo_owner.username,
+        if not self.migration_dest.forgejo_repo_exists(forgejo_owner=forgejo_owner,
                                                        repo=source_repo):
 
             fg_print.info(f"Importing {source_repo.source_system} {source_repo.source_type}"

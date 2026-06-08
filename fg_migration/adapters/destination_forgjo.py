@@ -334,25 +334,25 @@ class ForgejoDestination:
 
 
 
-    def forgejo_repo_exists(self, owner_username: str, repo: CanonicalRepo) -> bool:
+    def forgejo_repo_exists(self, forgejo_owner: CanonicalRepoOwner, repo: CanonicalRepo) -> bool:
         """check if a repository exists"""
         try:
             fg_print.debug(f"Checking if Repository {repo.get_safe_username()} exists in Forgejo"
-                           f" for owner {owner_username} to match {repo.source_system}"
+                           f" for owner {forgejo_owner.username} to match {repo.source_system}"
                            f" {repo.source_type}...")
-            repository = self.fg_api.repository.repo_get(owner=owner_username,
+            repository = self.fg_api.repository.repo_get(owner=forgejo_owner.username,
                                                          repo=repo.get_safe_username())
             if repository is not None:
                 fg_print.warning(f"{repo.source_type} {repo.name}"
                                   " already exists in Forgejo, skipping!")
                 return True
         except NotFoundError:
-            fg_print.info(f"{repo.source_type} {repo.name} not found in Forgejo, importing!")
+            fg_print.info(f"{repo.get_safe_username()} owned by {forgejo_owner.username} from {repo.source_type} {repo.username} not found in Forgejo, importing!")
             return False
         except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(f"Failed to check if {repo.source_type} {repo.name} "
-                           f"exists in Forgejo for owner {owner_username}! {detail}")
+                           f"exists in Forgejo for owner {forgejo_owner.username}! {detail}")
 
 
         fg_print.info(f"{repo.source_type} {repo.name} not found in Forgejo, importing!")
