@@ -474,6 +474,7 @@ class Migrator:
             f"Full Name"
         )
 
+        fg_print.warning("\n\nAdded user details:\n")
         fg_print.warning(header)
         fg_print.warning("-" * len(header))
 
@@ -484,6 +485,7 @@ class Migrator:
                 f"{(user.email or ''):<{email_w}}  "
                 f"{user.full_name}"
             )
+        fg_print.warning("\n\n")
 
 
 
@@ -533,7 +535,7 @@ class Migrator:
 
             # This individual retrieval replaces a search through the list. I'm not sure
             # if it'll use more time and be less reliable (more api calls)...
-            existing_forgejo_org = self.migration_dest.get_forgejo_organization(org = organization)
+            existing_forgejo_org = self.migration_dest.get_forgejo_organization(org=organization, quiet=True)
 
             # fg_print.debug(f"Existing Forgejo organizations: "
             #                f"{[org.username for org in existing_forgejo_organizations]}")

@@ -268,16 +268,24 @@ class ForgejoDestination:
 
 
 
-    def get_forgejo_organization(self, org: CanonicalOrganization) -> Organization|None:
+    def get_forgejo_organization(self, org: CanonicalOrganization,
+                                 quiet:bool=False) -> Organization|None:
         """Retrieve Forgejo organization with a given name"""
         try:
             #fg_print.debug(f"Trying to load forgejo organization {possible_org} "
             #               f"for gitlab project {project.name}...")
-            forgejo_org = self.fg_api.organization.org_get(org.get_safe_username())
-            fg_print.debug(f"Loaded organization {forgejo_org.username} ({forgejo_org.full_name}) matching {org.source_system}"
+            forgejo_org = self.fg_api.organization.org_get(org=org.get_safe_username())
+            fg_print.debug(f"Loaded organization {forgejo_org.username} ({forgejo_org.full_name})"
+                           f" matching {org.source_system}"
                            f" {org.source_type} {org.username}!")
             return forgejo_org
-        except (NotFoundError, ApiError, RequestException) as e:
+        except NotFoundError:
+            msg=f"Organization not found : {org.get_safe_username()}"
+            if not quiet:
+                fg_print.error(msg)
+            else:
+                fg_print.debug(msg)
+        except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(f"Failed to retrieve forgejo organization {org.get_safe_username()}"
                            f" for repo {org.get_safe_username()} matching {org.source_system}"

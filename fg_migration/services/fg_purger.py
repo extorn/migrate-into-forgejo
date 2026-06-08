@@ -102,7 +102,7 @@ class ForgejoPurger:
             if len(users) == 0:
                 break
             for user in users:
-                fg_print.info(f"deleting repos for user {user.login}")
+                fg_print.debug(f"deleting repos for user {user.login}")
                 self.del_all_repos_for_user(user=user)
 
 
@@ -110,7 +110,7 @@ class ForgejoPurger:
         """Delete all repos for user"""
 
         while True:
-            fg_print.info(f"Retrieving repos for {user.login}")
+            fg_print.debug(f"Retrieving repos for {user.login}")
             repos = self.forgejo_api.user.list_repos(username=user.login, page=page)
             page+=1
             if len(repos) == 0:
