@@ -45,10 +45,10 @@ forgejo_config = ForgejoConfig.from_config(config=config)
 
 def ask_confirmation() -> None:
     """Ask for confirmation before proceeding"""
-    fg_print.info("This script deletes your data. Use it with a grain of salt!")
+    fg_print.info("This script deletes your data. Be warned!")
     choice = confirm("Do you want continue?")
     if not choice:
-        fg_print.info("OK. See you next time!")
+        fg_print.info("No action taken.")
         os.sys.exit()
 
 
