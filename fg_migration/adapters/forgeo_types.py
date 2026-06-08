@@ -294,7 +294,7 @@ class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
             role=role,
             can_create_org_repo=team.can_create_org_repo,
             includes_all_repositories=team.includes_all_repositories,
-            permission=team.permission,
+            permission=ForgejoPermission(team.permission),
             units_map=dict(team.units_map),
         )
 

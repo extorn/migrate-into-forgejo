@@ -662,7 +662,7 @@ class ForgejoDestination:
                                                 releases=releases,
                                                 repo_owner=forgejo_owner.username,
                                                 service=service,
-                                                #uid=forgejo_owner.id,
+                                                uid=forgejo_owner.id, # deprecated (only in for backwards compatability reasons)
                                                 wiki=wiki,
                                         )
             return repo
@@ -677,6 +677,19 @@ class ForgejoDestination:
                                 "configured /tmp or similar folder (check Forgejo logs "
                                 "and app.ini for path)")
         return None
+
+
+
+    def get_active_user(self) -> User:
+        """The current logged in User (or owner of the current API Token in use)"""
+        try:
+            return self.fg_api.user.get_current()
+        except (ApiError, RequestException) as e:
+            detail = self._get_exception_detail(e)
+            fg_print.error(
+                f"failed to retrieve current user {detail}",
+            )
+            return None
 
 
 
@@ -839,6 +852,26 @@ class ForgejoDestination:
             return False
         return True
 
+
+
+    def forgejo_remove_user_from_organization_team(self, username: str,
+                                                   organization_name: str, team: Team) -> bool:
+        """remove a user from a team for a group"""
+
+        try:
+            self.fg_api.organization.org_remove_team_member(team.id, username)
+            fg_print.info(f"User {username} added to team {team.name}"
+                          f" of organization {organization_name}!")
+        except (ApiError, RequestException) as e:
+            detail = self._get_exception_detail(e)
+            fg_print.error(
+                f"Failed to add member {username} to team {team.name} "
+                f"of organization {organization_name}: {detail}",
+                f"Failed to add member {username} to team {team.name} "
+                f"for organization {organization_name}",
+            )
+            return False
+        return True
 
 
     def forgejo_add_milestone(self, owner: str, repo: str, forgejo_milestones:list[Milestone],

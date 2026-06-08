@@ -12,7 +12,7 @@ from fg_migration.core.canonical_types import (CanonicalOrganizationMembership,
                                                CanonicalOrganization,
                                                CanonicalRepo, CanonicalRepoMemberships,
                                                CanonicalUser)
-from fg_migration.adapters.forgeo_types import (ForgejoTeamDefinition, IterativeFetchError)
+from fg_migration.adapters.forgeo_types import (ForgejoPermission, ForgejoTeamDefinition, IterativeFetchError)
 from fg_migration.core.migration_source_type import MigrationSource
 from fg_migration.utils.utils import name_clean
 
@@ -383,10 +383,29 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
                 return
 
             try:
+                migration_username = self.migration_dest.get_active_user().login
+                remove_self = False
+                if not migration_username in all_usernames:
+                    # We must remove our user account from those with access to this repo.
+                    remove_self = True
+
                 # get all the teams in the organization owning this repository
                 for org_team in self.migration_dest.iter_forgejo_teams(
                                                      org_name=forgejo_repo_owner.username):
 
+                    current_team_def = ForgejoTeamDefinition.from_team(
+                                        team=org_team,
+                                        role_builder=self.migration_dest.forgejo_team_to_role_mapper,
+                                        require_exact=True)
+
+                    if current_team_def.permissions.permission == ForgejoPermission.OWNER:
+                        fg_print.debug(f"Removing migration user from team {org_team.name}")
+                        self.migration_dest.forgejo_remove_user_from_organization_team(
+                                                username=migration_username,
+                                                organization_name=forgejo_repo_owner.username,
+                                                team=org_team)
+
+                    fg_print.debug(f"Processing team {org_team.name}")
                     try:
                         team_members = list(
                             self.migration_dest.iter_forgejo_team_members(team=org_team)
@@ -400,6 +419,9 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
 
                     # only attach team if all members are valid repo accessors
                     if not member_usernames.issubset(all_usernames):
+                        fg_print.debug(f"Not all members {member_usernames} are valid repository "
+                                       f"accessors {all_usernames}, team {org_team.name} will NOT"
+                                       " be added as a collaborator")
                         continue
 
                     if len(member_usernames) == 0:
@@ -418,10 +440,11 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
                         ):
                             # Only add usernames if successfully added team.
                             affected_usernames = member_usernames.difference(all_team_usernames)
-                            fg_print.warning("Team attachment failed. Users represented by this team"
-                                            "will not be imported as individual collaborators because"
-                                            "doing so would alter the intended authorization model"
-                                            f"Affected users: {affected_usernames}")
+                            fg_print.warning("Team attachment failed. Users represented by this "
+                                             "team will not be imported as individual "
+                                             "collaborators because doing so would alter the "
+                                             "intended authorization model"
+                                             f"Affected users: {affected_usernames}")
 
                     # Mark users as accounted for by team intent.
                     # We deliberately do not fall back to individual collaborators
