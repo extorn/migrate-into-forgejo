@@ -8,7 +8,8 @@ from fg_migration.core.canonical_types import (
     CanonicalRepo,
     CanonicalRepoMemberships,
 )
-from fg_migration.adapters.forgeo_types import IterativeFetchError
+from fg_migration.adapters.forgeo_types import (ForgejoPermission, ForgejoTeamDefinition,
+                                                IterativeFetchError)
 from fg_migration.core.migration_source_type import MigrationSource
 from fg_migration.strategies.base_access_mapping_strategy import BaseAccessMappingStrategy
 from fg_migration.utils import fg_print
@@ -108,6 +109,56 @@ class DirectCollaboratorOnlyStrategy(BaseAccessMappingStrategy):
             fg_print.info(f"No accessors for {source_repo.name}")
             return
 
+        # ------------------------------------------------------------------------------------------
+        # STEP 1: Remove the current user from the owner team if that wouldn't leave it empty
+        # ------------------------------------------------------------------------------------------
+
+        all_accessor_usernames: set[str] = {m.username
+                                            for m in repo_accessors.members
+                                            if m.username}
+
+        # Get list of teams in the repository essentially.
+        iter_existing_repo_teams = self.migration_dest.iter_forgejo_teams_in_repository(
+                                            owner_username=source_repo.get_safe_owner_name(),
+                                            repo_name=source_repo.get_safe_username(),
+                                        )
+
+
+        migration_username = self.migration_dest.get_active_user().login
+        remove_self = False
+        if not migration_username in all_accessor_usernames:
+            # We must remove our user account from those with access to this repo.
+            remove_self = True
+        else:
+            migrator_access_levels: set[str] = {m.access_level
+                                                for m in repo_accessors.members
+                                                if m.username == migration_username}
+            remove_self = True
+            for access_level in migrator_access_levels:
+                perm = self.resolve_forgejo_permission(migration_source=migration_source,
+                                            source_access_level=access_level)
+                if perm == ForgejoPermission.OWNER:
+                    remove_self = False
+
+        # Find the owner team for this repository
+        owner_team : Team
+        try:
+            for repo_team in iter_existing_repo_teams:
+                current_team_def = ForgejoTeamDefinition.from_team(
+                            team=repo_team,
+                            role_builder=self.migration_dest.forgejo_team_to_role_mapper,
+                            require_exact=True)
+
+                if current_team_def.permissions.permission == ForgejoPermission.OWNER:
+                    owner_team = repo_team
+                    break
+        except IterativeFetchError:
+                fg_print.error(
+                    f"Failed to load organization teams for "
+                    f"{source_repo.get_safe_owner_name()}"
+                )
+                return
+
         fg_print.info(f"Importing direct collaborators for {source_repo.name}")
 
         forgejo_repo_owner = self.migration_dest.resolve_forgejo_repo_owner(source_repo)
@@ -128,7 +179,7 @@ class DirectCollaboratorOnlyStrategy(BaseAccessMappingStrategy):
         except IterativeFetchError:
             fg_print.error(f"Failed to load collaborators for {source_repo.name}")
             return
-
+        owner_added = False
         for membership in repo_accessors.members:
             if not membership.username:
                 continue
@@ -145,9 +196,27 @@ class DirectCollaboratorOnlyStrategy(BaseAccessMappingStrategy):
                 )
                 continue
 
-            self.migration_dest.import_individual_user_collaborator(
-                existing_collaborator_ids=existing_collaborator_ids,
-                accessor=membership,
-                source_repo=source_repo,
-                forgejo_permissions=perm,
-            )
+            handled = False
+            if perm == ForgejoPermission.OWNER and not source_repo.is_individual:
+                handled = True
+                owner_added = self.migration_dest.forgejo_add_user_to_organization_team(
+                                                membership.username,
+                                                organization_name=source_repo.get_safe_owner_name(),
+                                                team=owner_team)
+                fg_print.info(f"Added User {membership.username} to owners team {owner_team.name}")
+
+            if not handled:
+                # dont add the owner as a collaborator
+                self.migration_dest.import_individual_user_collaborator(
+                    existing_collaborator_ids=existing_collaborator_ids,
+                    accessor=membership,
+                    source_repo=source_repo,
+                    forgejo_permissions=perm,
+                )
+
+        if remove_self and owner_added:
+            fg_print.debug(f"Removing migration user from team {owner_team.name}")
+            self.migration_dest.forgejo_remove_user_from_organization_team(
+                                    username=migration_username,
+                                    organization_name=source_repo.get_safe_owner_name(),
+                                    team=owner_team)
