@@ -113,32 +113,17 @@ class DirectCollaboratorOnlyStrategy(BaseAccessMappingStrategy):
         # STEP 1: Remove the current user from the owner team if that wouldn't leave it empty
         # ------------------------------------------------------------------------------------------
 
-        all_accessor_usernames: set[str] = {m.username
-                                            for m in repo_accessors.members
-                                            if m.username}
-
         # Get list of teams in the repository essentially.
         iter_existing_repo_teams = self.migration_dest.iter_forgejo_teams_in_repository(
                                             owner_username=source_repo.get_safe_owner_name(),
                                             repo_name=source_repo.get_safe_username(),
                                         )
 
-
         migration_username = self.migration_dest.get_active_user().login
-        remove_self = False
-        if not migration_username in all_accessor_usernames:
-            # We must remove our user account from those with access to this repo.
-            remove_self = True
-        else:
-            migrator_access_levels: set[str] = {m.access_level
-                                                for m in repo_accessors.members
-                                                if m.username == migration_username}
-            remove_self = True
-            for access_level in migrator_access_levels:
-                perm = self.resolve_forgejo_permission(migration_source=migration_source,
-                                            source_access_level=access_level)
-                if perm == ForgejoPermission.OWNER:
-                    remove_self = False
+        remove_self = self.should_remove_migration_user_from_owners_team(
+                                        migration_source=migration_source,
+                                        migration_username=migration_username,
+                                        repo_accessors=repo_accessors)
 
         # Find the owner team for this repository
         owner_team : Team

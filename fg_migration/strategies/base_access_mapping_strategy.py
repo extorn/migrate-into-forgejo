@@ -8,7 +8,7 @@ from fg_migration.adapters.destination_forgjo import ForgejoDestination
 from fg_migration.adapters.forgeo_types import (ForgejoPermission, ForgejoRepositoryRole,
                                                 ForgejoRolePermissionDefinition,
                                                 ForgejoTeamDefinition, IterativeFetchError)
-from fg_migration.core.canonical_types import CanonicalOrganization
+from fg_migration.core.canonical_types import CanonicalOrganization, CanonicalRepoMemberships
 from fg_migration.core.config_types import MigrationConfig
 from fg_migration.core.migration_source_type import MigrationSource
 from fg_migration.strategies.access_mapping_strategy import AccessMappingStrategy
@@ -43,6 +43,34 @@ class BaseAccessMappingStrategy(AccessMappingStrategy):
             return None
 
         return role_definition.permission
+
+
+
+    def should_remove_migration_user_from_owners_team(self,
+                                                migration_source:MigrationSource,
+                                                migration_username:str,
+                                                repo_accessors:CanonicalRepoMemberships) -> bool:
+        """Is the migration user not supposed to have owner permission?"""
+        all_accessor_usernames: set[str] = {m.username
+                                            for m in repo_accessors.members
+                                            if m.username}
+
+        migration_username = self.migration_dest.get_active_user().login
+        remove_self = False
+        if not migration_username in all_accessor_usernames:
+            # We must remove our user account from those with access to this repo.
+            remove_self = True
+        else:
+            migrator_access_levels: set[str] = {m.access_level
+                                                for m in repo_accessors.members
+                                                if m.username == migration_username}
+            remove_self = True
+            for access_level in migrator_access_levels:
+                perm = self.resolve_forgejo_permission(migration_source=migration_source,
+                                            source_access_level=access_level)
+                if perm == ForgejoPermission.OWNER:
+                    remove_self = False
+        return remove_self
 
 
 

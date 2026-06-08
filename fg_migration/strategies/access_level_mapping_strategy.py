@@ -12,7 +12,8 @@ from fg_migration.core.canonical_types import (CanonicalOrganizationMembership,
                                                CanonicalOrganization,
                                                CanonicalRepo, CanonicalRepoMemberships,
                                                CanonicalUser)
-from fg_migration.adapters.forgeo_types import (ForgejoPermission, ForgejoTeamDefinition, IterativeFetchError)
+from fg_migration.adapters.forgeo_types import (ForgejoPermission, ForgejoTeamDefinition,
+                                                IterativeFetchError)
 from fg_migration.core.migration_source_type import MigrationSource
 from fg_migration.utils.utils import name_clean
 
@@ -388,21 +389,23 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
 
             try:
                 migration_username = self.migration_dest.get_active_user().login
-                remove_self = False
-                if not migration_username in all_usernames:
-                    # We must remove our user account from those with access to this repo.
-                    remove_self = True
+                remove_self = self.should_remove_migration_user_from_owners_team(
+                                                migration_source=migration_source,
+                                                migration_username=migration_username,
+                                                repo_accessors=repo_accessors)
 
                 # get all the teams in the organization owning this repository
                 for org_team in self.migration_dest.iter_forgejo_teams(
                                                      org_name=forgejo_repo_owner.username):
 
                     current_team_def = ForgejoTeamDefinition.from_team(
-                                        team=org_team,
-                                        role_builder=self.migration_dest.forgejo_team_to_role_mapper,
-                                        require_exact=True)
+                                team=org_team,
+                                role_builder=self.migration_dest.forgejo_team_to_role_mapper,
+                                require_exact=True)
 
-                    if remove_self and current_team_def.permissions.permission == ForgejoPermission.OWNER:
+                    if remove_self \
+                        and current_team_def.permissions.permission == ForgejoPermission.OWNER:
+
                         fg_print.debug(f"Removing migration user from team {org_team.name}")
                         self.migration_dest.forgejo_remove_user_from_organization_team(
                                                 username=migration_username,
