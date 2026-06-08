@@ -2,6 +2,7 @@
 #
 """
 Usage: purge_forgejo.py [--debug] [--orgs-repos] [--orgs] [--user-repos] [--current-repos]
+       purge_forgejo.py --all [--purge]
        purge_forgejo.py --users [--purge]
        purge_forgejo.py --help
 
@@ -15,7 +16,8 @@ Options:
   --user-repos         delete user repositories
   --current-repos       delete repositorties but only owned by the current user
   --users              delete users
-  --purge              delete all data for the user (only as an extra to --users)
+  --purge              delete all data for the user (only as an extra to --users or --all)
+  --all                delete everything
 """
 import os
 import configparser
@@ -63,7 +65,7 @@ if __name__ == "__main__":
 
     if not any([args["orgs-repos"], args["orgs"],
                 args["user-repos"], args["current-repos"],
-                args["users"]]):
+                args["users"], args["all"]]):
         fg_print.error("Please specify what to delete! You can use --help for more information.")
         os.sys.exit()
 
@@ -78,15 +80,15 @@ if __name__ == "__main__":
     purger = ForgejoPurger(fg_api=fg_api, forgejo_config=forgejo_config)
 
 
-    if args["orgs-repos"]:
+    if args["orgs-repos"] or args["all"]:
         purger.del_orgs_repos()
-    if args["user-repos"]:
+    if args["user-repos"] or args["all"]:
         purger.del_all_user_repos()
-    if args["current-repos"]:
+    if args["current-repos"] or args["all"]:
         purger.del_current_user_repos()
-    if args["orgs"]:
+    if args["orgs"] or args["all"]:
         purger.del_orgs()
-    if args["users"]:
+    if args["users"] or args["all"]:
         PURGE_OPT :bool = True if args["purge"] else False
         purger.del_users(purge=PURGE_OPT)
     purger.close()
