@@ -418,14 +418,17 @@ class Migrator:
             fg_print.info(f"Found {len(user.gpg_keys)} gpg keys for user {user.username}")
             fg_print.info(f"Found {len(user.keys)} public keys for user {user.username}")
 
-            # Note: newly created users will have the password field
+            # NOTE: newly created users will have the password field
             #       updated to their new temporary password
-            is_in_forgejo = self.migration_dest.forgejo_add_user(user=user, notify=notify)
+            # NOTE: we set the must_change_password to False if we need to upload an avatar
+            has_avatar = user.avatar_url is not None
+            is_in_forgejo = self.migration_dest.forgejo_add_user(user=user, notify=notify,
+                                                                 must_change_password=(not has_avatar))
             if not is_in_forgejo:
                 # something went wrong with the user import. can't do any more for this user.
                 continue
 
-            if user.avatar_url is not None:
+            if has_avatar:
                 if user.password is None:
                     # Password will be none in event the user already exists. We can't help that.
                     fg_print.error(f"Unable to import avatar for user {user.username}"
@@ -438,6 +441,11 @@ class Migrator:
                     url = f"{self.fg_api_builder.config.FORGEJO_API_URL}/user/avatar"
                     response = session.post(url = url, json={"image": avatar_b64})
                     response.raise_for_status()
+                    fg_print.info(f"Imported avatar for user {user.username}")
+                    session.close()
+                    #NOTE: now update force user to change password on next login
+                    self.migration_dest.forgejo_force_password_change(username=user)
+
                 except requests.RequestException as ex:
                     fg_print.error(
                         f"Unable to import avatar for user {user.username}: {ex}"

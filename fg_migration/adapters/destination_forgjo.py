@@ -512,7 +512,8 @@ class ForgejoDestination:
 
 
 
-    def forgejo_add_user(self, user:CanonicalSystemUser, notify: bool) -> bool:
+    def forgejo_add_user(self, user:CanonicalSystemUser, notify: bool,
+                         must_change_password:bool=True) -> bool:
         """add a user to Forgejo, return True if user created or already exists"""
 
         # need this because status 422 returned for conflict, not 409
@@ -527,7 +528,7 @@ class ForgejoDestination:
                     login_name=user.get_safe_username(),
                     password=tmp_password,
                     send_notify=notify,
-                    must_change_password=True,
+                    must_change_password=must_change_password,
                     source_id=0,  # local user
                     username=user.get_safe_username(),
                 )
@@ -546,6 +547,19 @@ class ForgejoDestination:
                 return False
         return True
 
+
+    def forgejo_force_password_change(self, user:CanonicalSystemUser, new_value:bool=True):
+        """Force user to change password on next login"""
+        try:
+            self.fg_api.admin.edit_user(username=user.username, must_change_password=new_value)
+        except (ApiError, RequestException) as e:
+            detail = self._get_exception_detail(e)
+            fg_print.error(f"Failed to force password change for {user.source_system} "
+                           f"user {user.username} as {user.get_safe_username()}: {detail}",
+                           f"Failed to force password change for {user.source_system} "
+                           f"user {user.username} as {user.get_safe_username()}",
+            )
+            return False
 
 
     def forgejo_add_team_to_repository(self,
