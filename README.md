@@ -6,7 +6,7 @@
 
 **This is under active development (06/06/2026)**,
 
-Ping me an email if you're interested in this code.
+Let me know if you're interested in this code
 
 ## Preamble
 
