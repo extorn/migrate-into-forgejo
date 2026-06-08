@@ -353,9 +353,11 @@ class ForgejoDestination:
             if repository is not None:
                 fg_print.warning(f"{repo.source_type} {repo.name}"
                                   " already exists in Forgejo, skipping!")
-                return True
+            return True
         except NotFoundError:
-            fg_print.info(f"{repo.get_safe_username()} owned by {forgejo_owner.username} from {repo.source_type} {repo.username} not found in Forgejo, importing!")
+            fg_print.info(f"{repo.get_safe_username()} owned by {forgejo_owner.username} "
+                          f"from {repo.source_type} {repo.username} not found "
+                          "in Forgejo, importing!")
             return False
         except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
@@ -624,8 +626,11 @@ class ForgejoDestination:
         forgejo_owner:CanonicalRepoOwner,
         issues: bool = True,
         labels: bool = True,
+        lfs:bool = True,
+        lfs_endpoint:str|None = None,
         milestones: bool = True,
         mirror: bool = True,
+        mirror_interval:str=None,
         pull_requests: bool = True,
         releases: bool = True,
         service: MigrateRepoOptionsService | None = None,
@@ -634,31 +639,43 @@ class ForgejoDestination:
         """Migrate a repository from the source service to Forgejo"""
 
         try:
+            fg_print.debug(f"Importing {source_repo.source_system} {source_repo.source_type}"
+                           f" {source_repo.username}, owner {forgejo_owner.username}.\n"
+                           f"as repo {source_repo.get_safe_username()} owned by"
+                           f" {source_repo.get_safe_owner_name()}")
             repo = self.fg_api.repository.repo_migrate(
-                                                auth_password=source_repo.auth_password,
-                                                auth_username=source_repo.auth_username,
-                                                auth_token=source_repo.auth_token,
                                                 clone_addr=source_repo.clone_url,
+                                                repo_name=source_repo.get_safe_username(),
+                                                auth_password=source_repo.auth_password,
+                                                auth_token=source_repo.auth_token,
+                                                auth_username=source_repo.auth_username,
                                                 description=source_repo.description,
-                                                service=service,
                                                 issues=issues,
                                                 labels=labels,
+                                                lfs=lfs,
+                                                lfs_endpoint=lfs_endpoint,
                                                 milestones=milestones,
                                                 mirror=mirror,
+                                                mirror_interval=mirror_interval,
+                                                private=source_repo.is_private,
                                                 pull_requests=pull_requests,
                                                 releases=releases,
-                                                private=source_repo.is_private,
                                                 repo_owner=forgejo_owner.username,
-                                                repo_name=source_repo.get_safe_username(),
-                                                uid=forgejo_owner.id,
+                                                service=service,
+                                                #uid=forgejo_owner.id,
                                                 wiki=wiki,
                                         )
             return repo
         except (ApiError, RequestException) as e:
-                detail = self._get_exception_detail(e)
-                fg_print.error(f"{source_repo.source_system} {source_repo.source_type}"
-                               f" {source_repo.get_safe_username()} import failed from url"
-                               f" {source_repo.clone_url} : {detail}")
+            detail = self._get_exception_detail(e)
+            fg_print.error(f"{source_repo.source_system} {source_repo.source_type}"
+                            f" {source_repo.get_safe_username()} import failed from url"
+                            f" {source_repo.clone_url} : {detail}")
+            if detail.find("The repository with the same name already exists.") >= 0:
+                fg_print.info("If you're certain this repository doesn't exist, then "
+                                "forgejo user likely doesn't have write access to the "
+                                "configured /tmp or similar folder (check Forgejo logs "
+                                "and app.ini for path)")
         return None
 
 

@@ -385,10 +385,7 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
             try:
                 # get all the teams in the organization owning this repository
                 for org_team in self.migration_dest.iter_forgejo_teams(
-                    org_name=forgejo_repo_owner.username
-                ):
-                    if org_team.id in existing_repo_team_ids:
-                        continue
+                                                     org_name=forgejo_repo_owner.username):
 
                     try:
                         team_members = list(
@@ -411,17 +408,20 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
                             # Don't add this one to the the repository unless user wanted
                             continue
 
-                    if not self.migration_dest.forgejo_add_team_to_repository(
-                        owner_username=forgejo_repo_owner.username,
-                        repo_name=source_repo.get_safe_username(),
-                        team_name=org_team.name,
-                    ):
-                        # Only add usernames if successfully added team.
-                        affected_usernames = member_usernames.difference(all_team_usernames)
-                        fg_print.warning("Team attachment failed. Users represented by this team"
-                                         "will not be imported as individual collaborators because"
-                                         "doing so would alter the intended authorization model"
-                                         f"Affected users: {affected_usernames}")
+                    if not org_team.id in existing_repo_team_ids:
+
+                        # Try and add the new team.
+                        if not self.migration_dest.forgejo_add_team_to_repository(
+                            owner_username=forgejo_repo_owner.username,
+                            repo_name=source_repo.get_safe_username(),
+                            team_name=org_team.name,
+                        ):
+                            # Only add usernames if successfully added team.
+                            affected_usernames = member_usernames.difference(all_team_usernames)
+                            fg_print.warning("Team attachment failed. Users represented by this team"
+                                            "will not be imported as individual collaborators because"
+                                            "doing so would alter the intended authorization model"
+                                            f"Affected users: {affected_usernames}")
 
                     # Mark users as accounted for by team intent.
                     # We deliberately do not fall back to individual collaborators

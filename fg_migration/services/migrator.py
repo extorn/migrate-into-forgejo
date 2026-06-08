@@ -474,7 +474,7 @@ class Migrator:
             f"Full Name"
         )
 
-        fg_print.warning("\n\nAdded user details:\n")
+        fg_print.warning("\n\Migrated user details:\n")
         fg_print.warning(header)
         fg_print.warning("-" * len(header))
 
