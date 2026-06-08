@@ -11,6 +11,7 @@ from typing import Callable, TypeVar, Iterator, override
 # Forgejo API imports:
 from pyforgejo import PyforgejoApi, Team
 from pyforgejo.core.api_error import ApiError
+from requests import Session
 
 
 from fg_migration.utils import fg_print
@@ -44,6 +45,19 @@ class ForgejoApiBuilder:
         return PyforgejoApi(base_url=self.config.FORGEJO_API_URL,
                             api_key=api_token,
                             httpx_client = self._build_httpx_client())
+
+
+    def build_session(self, username:str, password:str) -> Session:
+        """Build a raw requests session"""
+        session = Session()
+        session.auth = (username, password)
+        if(self.config.FORGEJO_CLIENT_AUTH_CERT is not None
+           and self.config.FORGEJO_CLIENT_AUTH_KEY is not None):
+            cert_path = self.config.FORGEJO_CLIENT_AUTH_CERT
+            key_path = self.config.FORGEJO_CLIENT_AUTH_KEY
+            session.cert = (cert_path, key_path)
+        return session
+
 
     def _build_httpx_client(self, timeout: float = 60,
                             follow_redirects: bool = True) -> HttpxClient:

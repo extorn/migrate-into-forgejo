@@ -433,8 +433,7 @@ class Migrator:
                     continue
 
                 try:
-                    session = requests.Session()
-                    session.auth = (user.username, user.password)
+                    session = self.fg_api_builder.build_session(user.username, user.password)
                     avatar_b64 = self._image_url_to_base64(user.avatar_url)
                     url = f"{self.fg_api_builder.config.FORGEJO_API_URL}/user/avatar"
                     response = session.post(url = url, json={"image": avatar_b64})
