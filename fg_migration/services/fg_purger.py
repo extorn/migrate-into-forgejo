@@ -97,11 +97,12 @@ class ForgejoPurger:
     def del_all_user_repos(self, page: int=1) -> None:
         """Delete all user repositories"""
         while True:
-            users = self.forgejo_api.admin.search_users(page)
+            users = self.forgejo_api.admin.search_users(page=page)
             page+=1
             if len(users) == 0:
                 break
             for user in users:
+                fg_print.info(f"deleting repos for user {user.login}")
                 self.del_all_repos_for_user(user=user)
 
 
@@ -109,11 +110,14 @@ class ForgejoPurger:
         """Delete all repos for user"""
 
         while True:
+            fg_print.info(f"Retrieving repos for {user.login}")
             repos = self.forgejo_api.user.list_repos(username=user.login, page=page)
             page+=1
-            user = self.forgejo_api.user.get_current()
+            if len(repos) == 0:
+                break
             for repo in repos:
                 try:
+                    fg_print.info(f"Deleting repo {repo.name}")
                     self.forgejo_api.repository.repo_delete(owner=user.login,
                                                             repo=repo.name)
                     fg_print.info(f"Repository {repo.name} deleted "
@@ -131,8 +135,13 @@ class ForgejoPurger:
         while True:
             repos = self.forgejo_api.user.current_list_repos(page=page)
             page+=1
+            if len(repos) == 0:
+                break
             user = self.forgejo_api.user.get_current()
             for repo in repos:
+                if repo.owner.id != user.id:
+                    fg_print.debug(f"Skipping repository {repo.name} not owned"
+                                   f" by user {user.login}")
                 try:
                     self.forgejo_api.repository.repo_delete(org_name=user.login,
                                                             repo_name=repo.name)

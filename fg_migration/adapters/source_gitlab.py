@@ -313,17 +313,17 @@ class GitLabMigrationSource(MigrationSource):
                 fg_print.debug(f"{project.path} : {project.name}")
                 repo = CanonicalRepo(source_system=self.source_system,
                                      source_id=project.get_id(),
-                                    is_individual=is_individual,
-                                    username=project.path,
-                                    name=project.name,
-                                    owner_name=owner_name,
-                                    clone_url=clone_url,
-                                    is_private=is_private,
-                                    description=project.description,
-                                    auth_username=auth_username,
-                                    auth_password=auth_password,
-                                    auth_token=auth_token,
-                                    source_type="Project")
+                                     is_individual=is_individual,
+                                     username=project.path,
+                                     name=project.name,
+                                     owner_name=owner_name,
+                                     clone_url=clone_url,
+                                     is_private=is_private,
+                                     description=project.description,
+                                     auth_username=auth_username,
+                                     auth_password=auth_password,
+                                     auth_token=auth_token,
+                                     source_type="Project")
                 repos.append(repo)
                 seen_repos_map[repo.source_id] = repo.name
         except IterativeFetchError:
@@ -336,7 +336,7 @@ class GitLabMigrationSource(MigrationSource):
     def _get_gitlab_repo_name(self, project: gitlab.v4.objects.Project) -> str|None:
         proj_path = project.path_with_namespace
 
-        fg_print.info(f"Project: {proj_path}")
+        fg_print.debug(f"Project: {proj_path}")
 
         path_parts = proj_path.split("/", 1)
 

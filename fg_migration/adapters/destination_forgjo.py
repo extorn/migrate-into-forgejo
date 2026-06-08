@@ -640,6 +640,7 @@ class ForgejoDestination:
                                                 pull_requests=pull_requests,
                                                 releases=releases,
                                                 private=source_repo.is_private,
+                                                repo_owner=forgejo_owner.username,
                                                 repo_name=source_repo.get_safe_username(),
                                                 uid=forgejo_owner.id,
                                                 wiki=wiki,

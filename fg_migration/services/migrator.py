@@ -569,7 +569,7 @@ class Migrator:
                     fg_print.info(f"Importing personal {source_repo.source_type}"
                                   f" {source_repo.name} from owner {source_repo.owner_name}")
                 else:
-                    fg_print.info(f"Importing {source_repo.source_type} {source_repo.name}"
+                    fg_print.info(f"Importing shared {source_repo.source_type} {source_repo.name}"
                                   f" from owner {source_repo.owner_name}")
 
                 # import project repo
