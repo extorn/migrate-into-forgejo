@@ -19,7 +19,7 @@ from fg_migration.utils import fg_print
 from fg_migration.utils.utils import name_clean
 
 
-@deprecated("Not Implemented")
+@deprecated("Untested, possibly incomplete")
 class FlattenedHierarchyStrategy(BaseAccessMappingStrategy):
     """
 Access mapping strategy that derives Forgejo teams from source-system

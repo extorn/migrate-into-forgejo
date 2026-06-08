@@ -85,8 +85,8 @@ class GitLabConfig:
     GITLAB_ADMIN_USER : str | None
     GITLAB_ADMIN_PASS : str | None
     GITLAB_SYNC_CONNECTION_TYPE : str | None
-    MAX_DESCENDANT_GROUP_DEPTH : int = 0 #TODO expose to a config
-    MAX_SUB_GROUP_DEPTH : int = 0 #TODO expose to a config
+    MAX_DESCENDANT_GROUP_DEPTH : int = 20 #TODO expose to a config (20 is GitLab documented max)
+    MAX_SUB_GROUP_DEPTH : int = 20 #TODO expose to a config (20 is GitLab documented max)
 
     @classmethod
     def from_config(cls, config:configparser.RawConfigParser, section:str="gitlab"):

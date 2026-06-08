@@ -8,6 +8,7 @@ from fg_migration.strategies.access_level_mapping_strategy import AccessLevelAcc
 from fg_migration.strategies.direct_collaborator_strategy import DirectCollaboratorOnlyStrategy
 from fg_migration.strategies.existing_forgejo_preserving_strategy \
                                     import ExistingForgejoPreservingStrategy
+from fg_migration.strategies.flattened_hierarchy_strategy import FlattenedHierarchyStrategy
 from fg_migration.strategies.strict_access_level_mapping_strategy \
                                     import StrictAccessLevelMappingStrategy
 from fg_migration.utils import fg_print
@@ -55,6 +56,10 @@ class Migrator:
                                                     migration_config=self.migration_config)
             case "preserve_existing_teams":
                 strategy = ExistingForgejoPreservingStrategy(
+                                                    migration_dest=self.migration_dest,
+                                                    migration_config=self.migration_config)
+            case "flatten_source_team_hierarchy":
+                strategy = FlattenedHierarchyStrategy(
                                                     migration_dest=self.migration_dest,
                                                     migration_config=self.migration_config)
             case _:
