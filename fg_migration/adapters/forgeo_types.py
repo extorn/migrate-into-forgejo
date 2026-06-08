@@ -4,7 +4,6 @@ from abc import abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
 import os
-from pprint import pformat
 import re
 import time
 from typing import Callable, TypeVar, Iterator, override
@@ -16,7 +15,7 @@ from requests import Session
 
 from fg_migration.utils import fg_print
 from fg_migration.core.config_types import ForgejoConfig
-from fg_migration.utils.utils import diff_dataclasses
+from fg_migration.utils.utils import diff_dataclasses, diff_dicts
 from httpx import Client as HttpxClient, HTTPError
 
 class ForgejoPermission(StrEnum):
@@ -194,6 +193,7 @@ class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
                                      require_exact:bool=False) -> tuple[ForgejoRepositoryRole,bool]:
 
         best_role = None
+        best_perm_def = None
         best_score = float("-inf")
         debug_log = []
 
@@ -230,14 +230,24 @@ class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
             if score > best_score:
                 best_score = score
                 best_role = role
+                best_perm_def = perm_def
 
         #best_definition = self.role_definitions[best_role]
         fg_print.debug("\n".join(debug_log))
+        if team.permission != best_perm_def.permission:
+            perm_diff_dict = {'permission':{'forgejo':team.permission,
+                                            'closest':best_perm_def.permission.value}}
+            perm_diff = f"\n{perm_diff_dict}"
+        else:
+            perm_diff = ""
+
         fg_print.warning(
             f"No exact role match found for existing Forejo team {team.name}. "
             f"Closest role is {best_role}, "
-            f"but sought permission: {team.permission}, "
-            f"sought unit_map:\n{pformat(team.units_map)}"
+            f"{perm_diff}"
+            f"\n{diff_dicts(first=team.units_map, second=best_perm_def.units_map,
+                            first_heading="forgejo", second_heading="closest")}"
+
         )
 
         role = best_role

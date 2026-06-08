@@ -10,17 +10,21 @@ def diff_dataclasses(before, after) -> dict:
     before_dict = asdict(before)
     after_dict = asdict(after)
 
-    diff = {}
+    return diff_dicts(before_dict, after_dict)
 
-    for key in before_dict.keys() | after_dict.keys():
-        if before_dict.get(key) != after_dict.get(key):
+
+def diff_dicts(first:dict, second:dict,
+               first_heading:str="before", second_heading:str="after") -> dict:
+    """get a diff output for two dicts"""
+    diff = {}
+    for key in first.keys() | second.keys():
+        if first.get(key) != second.get(key):
             diff[key] = {
-                "before": before_dict.get(key),
-                "after": after_dict.get(key),
+                first_heading: first.get(key),
+                second_heading: second.get(key),
             }
 
     return diff
-
 
 
 def name_clean(name):
