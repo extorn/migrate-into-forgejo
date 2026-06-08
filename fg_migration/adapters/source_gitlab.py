@@ -17,7 +17,7 @@ from fg_migration.core.canonical_types import (CanonicalGpgKey, CanonicalOrganiz
                                                CanonicalKey, CanonicalOrganization,
                                                CanonicalOrganizations, CanonicalRepo,
                                                CanonicalRepoMembership, CanonicalRepoMemberships,
-                                               CanonicalSystemUser, CanonicalUser)
+                                               CanonicalSystemUser, CanonicalUser, HierarchyNode)
 from fg_migration.core.config_types import GitLabMigrationConfig, GitLabConfig
 
 class GitLabMigrationSource(MigrationSource):
@@ -370,7 +370,7 @@ class GitLabMigrationSource(MigrationSource):
         try:
             for group in self._iter_all_groups_of_project(project):
                 # add all repo_accessors for this group
-                root_hierarchy = [CanonicalRepoMembership.HierarchyNode(name=group.path)]
+                root_hierarchy = [HierarchyNode(name=group.path)]
                 repo_accessors_members += self._process_group(repository=repository,
                                                               group=group,
                                                               hierarchy=root_hierarchy)
@@ -383,7 +383,7 @@ class GitLabMigrationSource(MigrationSource):
 
     def _process_group(self, repository : CanonicalRepo,
                        group:gitlab.v4.objects.Group,
-                       hierarchy : list[CanonicalRepoMembership.HierarchyNode]
+                       hierarchy : list[HierarchyNode]
                        ) -> list[CanonicalRepoMembership]:
         """A recursive trawler of groups, descendant and sub groups"""
         group_id = group.get_id()

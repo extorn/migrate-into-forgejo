@@ -131,18 +131,19 @@ class CanonicalRepoMembership:
        nested team / group structure in the source system."""
     username:str
     repository:CanonicalRepo
-    hierarchy:tuple[HierarchyNode, ...] | None
+    hierarchy:list[HierarchyNode] | None
     access_level:str
 
     def get_safe_username(self) -> str:
         """Get Forgejo safe username"""
         return name_clean(self.username)
 
-    @dataclass(frozen=True)
-    class HierarchyNode:
-        """Define the hierachy of this node as explained in the class CanonicalRepoMembership"""
-        name: str
-        relation: Literal["sub", "desc"]|None = None
+@dataclass(frozen=True)
+class HierarchyNode:
+    """Define the Source system hierachy of some Canonical Object as
+       explained in the class CanonicalRepoMembership"""
+    name: str
+    relation: Literal["sub", "desc"]|None = None
 
 
 

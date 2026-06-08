@@ -9,7 +9,7 @@ import re
 import time
 from typing import Callable, TypeVar, Iterator, override
 # Forgejo API imports:
-from pyforgejo import CreateTeamOptionPermission, PyforgejoApi, Team
+from pyforgejo import PyforgejoApi, Team
 from pyforgejo.core.api_error import ApiError
 
 
@@ -19,12 +19,13 @@ from fg_migration.utils.utils import diff_dataclasses
 from httpx import Client as HttpxClient, HTTPError
 
 class ForgejoPermission(StrEnum):
-    """Enum duplication of the PyForgeJoApi type CreateTeamOptionPermission.
-       The key difference is that it adds the 'secret' owner permission"""
+    """Enum duplication of the PyForgeJoApi Union type TeamPermission"""
     OWNER = "owner"
     ADMIN = "admin"
     WRITE = "write"
-    READ = "read"
+    READ  = "read"
+    NONE  = "none" # Note, this is included within TeamPermission, so
+                   # added in case later permitted during create/update
 
 class ForgejoApiBuilder:
     """A builder for the PyForgejoApi, configuring authentication etc in a central way"""
@@ -88,7 +89,7 @@ class ForgejoRolePermissionDefinition:
     role : ForgejoRepositoryRole
     can_create_org_repo:bool = False
     includes_all_repositories:bool = False
-    permission:CreateTeamOptionPermission = ""
+    permission : ForgejoPermission = ForgejoPermission.NONE
     # use of field here ensures new instance for every instance of the class
     units_map: dict[str,str] = field(default_factory=dict)
 
@@ -185,7 +186,7 @@ class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
 
             # Exact match shortcut
             if (
-                str(perm_def.permission) == str(team.permission)
+                perm_def.permission.value == team.permission
                 and perm_def.units_map == team.units_map
             ):
                 fg_print.debug(f"SUCCESS: Exact match for team {team.name}: {role}")
@@ -194,7 +195,7 @@ class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
             score = 0
 
             # Permission match is important
-            if str(perm_def.permission) == str(team.permission):
+            if perm_def.permission.value == team.permission:
                 score += 10
 
             # Compare unit permissions

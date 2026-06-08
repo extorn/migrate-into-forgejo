@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 
 from pyforgejo import Team
 
+from fg_migration.adapters.forgeo_types import ForgejoPermission
 from fg_migration.core.canonical_types import CanonicalOrganization, CanonicalRepo
 from fg_migration.core.migration_source_type import MigrationSource
 
@@ -100,6 +101,6 @@ class AccessMappingStrategy(ABC):
         self,
         migration_source:MigrationSource,
         source_access_level: str,
-    ) -> str | None:
+    ) -> ForgejoPermission | None:
         """return the most appropriate Forgejo permission string
            for the given access level {read,write,admin}"""

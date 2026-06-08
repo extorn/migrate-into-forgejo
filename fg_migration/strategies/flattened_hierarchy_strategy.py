@@ -1,6 +1,9 @@
 """contains the DirectCollaboratorOnlyStrategy class"""
+from copy import deepcopy
 from typing import override
 from warnings import deprecated
+
+from pyforgejo import Team
 
 
 from fg_migration.core.canonical_types import (
@@ -8,10 +11,12 @@ from fg_migration.core.canonical_types import (
     CanonicalRepo,
     CanonicalRepoMemberships,
 )
-from fg_migration.adapters.forgeo_types import IterativeFetchError
+from fg_migration.adapters.forgeo_types import (ForgejoPermission, ForgejoTeamDefinition,
+                                                IterativeFetchError)
 from fg_migration.core.migration_source_type import MigrationSource
 from fg_migration.strategies.base_access_mapping_strategy import BaseAccessMappingStrategy
 from fg_migration.utils import fg_print
+from fg_migration.utils.utils import name_clean
 
 
 @deprecated("Not Implemented")
@@ -114,7 +119,6 @@ Behaviour:
         return
 
 
-
     # ---------------------------------------------------------
     # Repository access: direct users only
     # ---------------------------------------------------------
@@ -132,7 +136,15 @@ Behaviour:
             fg_print.info(f"No accessors for {source_repo.name}")
             return
 
-        fg_print.info(f"Importing direct collaborators for {source_repo.name}")
+        fg_print.info(f"Importing Teams and Collaborators for {source_repo.name}")
+
+        if not source_repo.is_individual:
+            hierachical_map : dict[str,ForgejoTeamDefinition] = {}
+            self._build_teams_linked_to_repository(migration_source=migration_source,
+                                                   hierachical_map=hierachical_map,
+                                                   source_repo=source_repo,
+                                                   repo_accessors=repo_accessors)
+
 
         forgejo_repo_owner = self.migration_dest.resolve_forgejo_repo_owner(source_repo)
         if not forgejo_repo_owner or not forgejo_repo_owner.username:
@@ -175,3 +187,126 @@ Behaviour:
                 source_repo=source_repo,
                 forgejo_permissions=perm,
             )
+
+    def _build_teams_linked_to_repository(self,
+                                          migration_source: MigrationSource,
+                                          hierachical_map : dict[str,ForgejoTeamDefinition],
+                                          source_repo:CanonicalRepo,
+                                          repo_accessors: CanonicalRepoMemberships): # type: ignore
+
+        assert len(hierachical_map) == 0
+
+        organization = self.migration_dest.get_forgejo_organization_owner_of_repository(
+                                                                    source_repo=source_repo)
+
+        existing_teams_iter = self.migration_dest.iter_forgejo_teams_in_repository(
+                                        owner_username=organization.username,
+                                        repo_name=source_repo.get_safe_username())
+        # technically a set of teams, but no guarantee they've added support for sets to Team
+        team_name_team_map = {item.name:item
+                              for item in existing_teams_iter
+                              if item.name is not None}
+
+        # build a cache of hierarchy specific to this repo to Team.
+        # there should ALWAYS be a value in here by the point it is requested.
+        hierarchy_key_to_team_map : dict[str,Team] = {}
+
+        # This is potentially a saving in API calls due to the fuzzy mapping to teams
+        team_members_cache: dict[int, set[str]] = {} # map[Team.id -> {member.username}]
+
+        for accessor in repo_accessors.members:
+
+            #################################
+            # 1. Create or acquire the team
+            #################################
+
+            suffix = self._hierarchy_to_team_suffix(accessor.hierarchy)
+            hierarchy_key = f"{accessor.access_level}-{suffix}"
+            hierachical_team_definition = hierachical_map.get(hierarchy_key)
+            is_new_team = False
+            team : Team
+            if not hierachical_team_definition:
+                team_definition = self._get_forgejo_team_definition(
+                                                migration_source=migration_source,
+                                                source_access_level=accessor.access_level,
+                                                fuzzy=self.migration_config.IS_FUZZY_TEAMS_ALLOWED)
+
+                team_name = f"{team_definition.name}-{suffix}"
+                hierachical_team_definition = deepcopy(team_definition)
+                hierachical_team_definition.name = team_name
+                hierachical_map[hierarchy_key] = hierachical_team_definition
+                existing_team = team_name_team_map.get(team_name)
+                if not existing_team:
+                    if team_definition.permissions.permission == ForgejoPermission.OWNER:
+                        # cannot create the owner team, but it should ALWAYS exist
+                        fg_print.error("Unable to find Owner team, but not permitted to create it")
+                        continue
+
+                    team = self._safely_add_new_team(organization=organization,
+                                                     team_definition=hierachical_team_definition)
+                    if team is None:
+                        fg_print.error(f"Unable to create team {team_definition.name}. "
+                                       "Unable to process it further")
+                        continue
+                    if team.name is None:
+                        fg_print.error(f"Created team id {team.id} with no name. "
+                                        "Unable to process it further")
+                        continue
+
+                    team_name_team_map[team.name] = team
+                    is_new_team = True
+
+                    # Now add this team to the repository as a collaborator
+                    added = self.migration_dest.forgejo_add_team_to_repository(
+                                                owner_username=organization.name,
+                                                repo_name=source_repo.get_safe_username(),
+                                                team_name=team.name)
+
+                    if not added:
+                        fg_print.error(f"Created Team {team.name}, but was failed to add it to"
+                                       f" repository {source_repo.get_safe_username()} of "
+                                       f"organization {organization.name}")
+                else:
+                    team = existing_team
+                hierarchy_key_to_team_map[hierarchy_key] = team
+
+            else:
+                team = hierarchy_key_to_team_map.get(hierarchy_key)
+                if team is None:
+                    fg_print.error("Earlier attempt to get/create team for "
+                                   f"hierarchy {hierarchy_key} failed. Skipping.")
+                    continue
+
+            ##########################
+            # 2. Add the members
+            ##########################
+            self.import_team_users_from_usernames(organization=organization,
+                                                  dest_team=team,
+                                                  usernames={accessor.get_safe_username()},
+                                                  team_members_cache=team_members_cache,
+                                                  is_new_team=is_new_team)
+
+
+
+
+    def _hierarchy_to_team_suffix(self, hierarchy: str | None) -> str:
+
+        if hierarchy is None:
+            return "direct"
+
+        parts: list[str] = []
+
+        for token in hierarchy.split("/"):
+            if token == "":
+                continue
+
+            if token == ":d:":
+                parts.append("desc")
+
+            elif token == ":s:":
+                parts.append("sub")
+
+            else:
+                parts.append(name_clean(token))
+
+        return "-".join(parts)

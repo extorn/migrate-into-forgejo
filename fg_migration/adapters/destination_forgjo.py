@@ -10,10 +10,12 @@ from typing_extensions import deprecated
 
 import dateutil.parser
 
-from pyforgejo import PyforgejoApi # pip install pyforgejo (https://github.com/h44z/pyforgejo)
+from pyforgejo import (CreateTeamOptionPermission,
+                       EditTeamOptionPermission,
+                       PyforgejoApi) # pip install pyforgejo (https://github.com/h44z/pyforgejo)
 
 # Forgejo API imports:
-from pyforgejo import (ConflictError, CreateTeamOptionPermission, GpgKey, Issue, Label,
+from pyforgejo import (ConflictError, GpgKey, Issue, Label,
                        MigrateRepoOptionsService, Milestone,
                       NotFoundError, Organization, PublicKey, Repository, Team, User)
 from pyforgejo.core.api_error import ApiError
@@ -24,10 +26,12 @@ from fg_migration.core.canonical_types import (CanonicalOrganization, CanonicalR
                                                CanonicalRepoMembership,
                                                CanonicalRepoOwner, CanonicalSystemUser)
 from fg_migration.core.config_types import ForgejoConfig
-from fg_migration.adapters.forgeo_types import (ApiPaginator, ForgejoRepositoryRole,
+from fg_migration.adapters.forgeo_types import (ApiPaginator, ForgejoPermission,
+                                                ForgejoRepositoryRole,
                                                 ForgejoRolePermissionDefinition,
                                                 ForgejoTeamDefinition, ForgejoTeamRoleBuilder,
-                                                ForgejoTeamRoleMapper, IterativeFetchError)
+                                                ForgejoTeamRoleMapper)
+from fg_migration.utils.utils import get_union_values_as_str
 
 
 class ForgejoDestination:
@@ -76,7 +80,7 @@ class ForgejoDestination:
             role = ForgejoRepositoryRole(role_id)
 
             # Trim whitespace on cfg values just in case with strip()
-            cfg_permission : CreateTeamOptionPermission = role_cfg.get("permission", "").strip()
+            cfg_permission = ForgejoPermission[role_cfg.get("permission", "").strip()]
             permissions = ForgejoRolePermissionDefinition(
                 role=role,
                 can_create_org_repo=role_cfg.get("can_create_org_repo", False),
@@ -462,7 +466,7 @@ class ForgejoDestination:
     def forgejo_add_replace_collaboration(self,
                                         existing_collaborator_ids:set[int],
                                         user:User,
-                                        repo:CanonicalRepo, permissions:CreateTeamOptionPermission):
+                                        repo:CanonicalRepo, permissions:ForgejoPermission):
         """Add collaboration entry for repo. Will replace any existing one
            matching the name provided"""
         # If there is an existing collaboration record, delete it.
@@ -744,6 +748,18 @@ class ForgejoDestination:
                                       definition : ForgejoTeamDefinition) -> Team | None:
         """Add a team to an organization"""
         try:
+            perm = definition.permissions.permission
+            acceptable_values = get_union_values_as_str(CreateTeamOptionPermission)
+            if not perm.value in acceptable_values:
+                # Trying to create the Owner Team (but this is always created automatically)!
+                fg_print.error(
+                    f"Unsupported permission for creating Forgejo Team {definition.name}. "
+                    "Updating Team cancelled.",
+                    f"Failed to create team {definition.name} in Forgejo. "
+                    f"Valid Permissions are : {acceptable_values}",
+                )
+                return None
+
             team = self.fg_api.organization.org_create_team(org=org_name,
                         name=definition.name,
                         can_create_org_repo=definition.permissions.can_create_org_repo,
@@ -817,16 +833,35 @@ class ForgejoDestination:
 
     def forgejo_update_organization_team(self, team:Team, current_definition:ForgejoTeamDefinition,
                                          new_definition:ForgejoTeamDefinition) -> Team | None :
-        """Rename a Forgejo Team (e.g. Owners)"""
+        """Rename a Forgejo Team (But not Owners, that's unsupported by Forgejo)"""
         try:
             fg_print.info(f"Updating Forgejo team {team.name}"
                           f" using new definition {new_definition}...")
+
+            perm = new_definition.permissions.permission
+            acceptable_values = get_union_values_as_str(EditTeamOptionPermission)
+            if current_definition.permissions.permission != perm \
+                and not perm.value in acceptable_values:
+                # Trying to change the permission of the team up to Owner!
+                fg_print.error(
+                    f"Unsupported permission for editing Forgejo Team {team.name}. "
+                    "Updating Team cancelled.",
+                    f"Failed to update team {team.name} in Forgejo. "
+                    f"Valid new Permissions are : {acceptable_values}")
+                return None
+            if perm == ForgejoPermission.OWNER and current_definition.name != new_definition.name:
+                fg_print.error(
+                    f"Changing the name of the Forgejo Owners Team {team.name} is not supported. "
+                    "Updating Team cancelled.",
+                    f"Failed to update team {team.name} in Forgejo. ")
+                return None
+
             updated = self.fg_api.organization.org_edit_team(id=team.id,
                     name=new_definition.name,
                     can_create_org_repo=new_definition.permissions.can_create_org_repo,
                     description=new_definition.description,
                     includes_all_repositories=new_definition.permissions.includes_all_repositories,
-                    permission=new_definition.permissions.permission,
+                    permission=perm.value,
                     units=list(new_definition.permissions.units_map.keys()),
                     units_map=new_definition.permissions.units_map
                     )
@@ -878,75 +913,11 @@ class ForgejoDestination:
 
 
 
-    def import_team_users_from_usernames(
-        self,
-        organization: CanonicalOrganization,
-        usernames: set[str],
-        dest_team: Team,
-        team_members_cache: dict[int, set[str]], # map[Team.id -> {member.username}]
-        is_new_team: bool,
-    ):
-        """Create an entry in the team for every user with a username in the set
-           provided. Uses the team_members_cache to identify existing team users
-           from previous operations"""
-        # ---------------------------------------------
-        # STEP 1: resolve existing members
-        # ---------------------------------------------
-        team_key = dest_team.id
-        if team_key is None:
-            fg_print.error(f"Team id is not set for team {dest_team.name}")
-        if team_key in team_members_cache:
-            existing_member_names = team_members_cache[team_key]
-        else:
-            if is_new_team:
-                existing_member_names = set()
-            else:
-                try:
-                    existing_member_names = {
-                        m.login
-                        for m in self.iter_forgejo_team_members(
-                            team=dest_team
-                        )
-                        if m.login
-                    }
-                except IterativeFetchError:
-                    fg_print.warning(
-                        f"Could not fetch members for team {dest_team.name}, "
-                        f"assuming empty (may cause duplicates)"
-                    )
-                    existing_member_names = set()
-
-            # cache is purely optional optimisation
-            team_members_cache[team_key] = existing_member_names
-
-        # ---------------------------------------------
-        # STEP 2: reconcile membership (idempotent)
-        # ---------------------------------------------
-        for username in usernames:
-
-            if username in existing_member_names:
-                continue
-
-            added = self.forgejo_add_user_to_organization_team(
-                organization_name=organization.get_safe_username(),
-                username=username,
-                team=dest_team,
-            )
-
-            if added:
-                existing_member_names.add(username)
-            else:
-                fg_print.error(
-                    f"Failed to add {username} to team {dest_team.name}"
-                )
-
-
-
     def import_individual_user_collaborator(self,
                                             existing_collaborator_ids:set[int],
                                             accessor:CanonicalRepoMembership,
                                             source_repo:CanonicalRepo,
-                                            forgejo_permissions:CreateTeamOptionPermission):
+                                            forgejo_permissions:ForgejoPermission):
         """identical to _import_individual_collaborator except first checks
            a user exists in Forgejo with that username"""
         forgejo_user = self.get_forgejo_user(username=accessor.get_safe_username())
