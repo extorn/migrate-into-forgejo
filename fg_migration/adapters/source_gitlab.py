@@ -416,7 +416,7 @@ class GitLabMigrationSource(MigrationSource):
 
                 for descendant_group in self._iter_all_descendant_groups_of_group(group=group):
                     desc_hierarchy = copy(hierarchy)
-                    desc_hierarchy.append(CanonicalRepoMembership.HierarchyNode(
+                    desc_hierarchy.append(HierarchyNode(
                                                 name=descendant_group.path,
                                                 relation="desc"))
                     descendant_group_id = descendant_group.get_id()
@@ -428,7 +428,7 @@ class GitLabMigrationSource(MigrationSource):
             if depth <= self.gitlab_config.MAX_SUB_GROUP_DEPTH:
                 for sub_group in self._iter_all_sub_groups_of_group(group=group):
                     sub_hierarchy = copy(hierarchy)
-                    sub_hierarchy.append(CanonicalRepoMembership.HierarchyNode(
+                    sub_hierarchy.append(HierarchyNode(
                                                 name=sub_hierarchy.path,
                                                 relation="sub"))
                     sub_group_id = sub_group.get_id()
