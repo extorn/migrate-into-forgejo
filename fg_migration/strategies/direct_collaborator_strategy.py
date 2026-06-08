@@ -89,16 +89,7 @@ class DirectCollaboratorOnlyStrategy(BaseAccessMappingStrategy):
         )
         return
 
-    @override
-    def import_team_users_from_usernames(
-        self,
-        organization: CanonicalOrganization,
-        usernames: set[str],
-        dest_team: Team,
-        team_members_cache: dict[int, set[str]], # map[Team.id -> {member.username}]
-        is_new_team: bool,
-    ):
-        return
+
 
     # ---------------------------------------------------------
     # Repository access: direct users only
