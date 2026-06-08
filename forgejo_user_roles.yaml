@@ -1,5 +1,14 @@
 # This is a yaml format file. While easy to read, these files use indentation to provide structure so be careful
 # when editing not to break the format.
+#
+# NOTE: VALID VALUES for all except OWNERS:
+# permission [read,write,admin]
+# permission is used when adding a collaborator
+#
+# units [read,write,none]
+# units are used when defining a team. If you didn't provide any, the team would fall back to using the more coarse grained permission value described above.
+#
+
 roles:
 # A list of user roles to be (or being) used in this Forgejo server
 # The headings in CAPS must not be changed, they are used as key inside the script
@@ -46,15 +55,15 @@ roles:
     permission: admin
 
     units_map:
-      repo.actions: write
-      repo.code: write
-      repo.ext_issues: read
+      repo.actions: admin
+      repo.code: admin
+      repo.ext_issues: admin
       repo.ext_wiki: admin
-      repo.issues: write
-      repo.packages: write
-      repo.projects: write
-      repo.pulls: owner
-      repo.releases: write
+      repo.issues: admin
+      repo.packages: admin
+      repo.projects: admin
+      repo.pulls: admin
+      repo.releases: admin
       repo.wiki: admin
 
 
@@ -77,7 +86,7 @@ roles:
       repo.issues: write
       repo.packages: write
       repo.projects: read
-      repo.pulls: owner
+      repo.pulls: write
       repo.releases: write
       repo.wiki: write
 

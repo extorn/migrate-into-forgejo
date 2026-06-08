@@ -138,6 +138,7 @@ class ForgejoTeamDefinition:
 
 
             role_permissions = role_builder.get_role_permissions(role)
+
             # we don't cache these because teams are only unique in a given organization.
              # Allow empty is only used when deciding on creating new teams so any value is safe.
             return ForgejoTeamDefinition(name = team.name,

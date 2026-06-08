@@ -86,7 +86,7 @@ class ForgejoDestination:
                 can_create_org_repo=role_cfg.get("can_create_org_repo", False),
                 includes_all_repositories=role_cfg.get("includes_all_repositories", False),
                 permission=cfg_permission,
-                units_map=role_cfg["units_map"],
+                units_map=role_cfg.get("units_map",{}),
             )
 
             cfg_name : str = role_cfg.get("team_name", "").strip()
