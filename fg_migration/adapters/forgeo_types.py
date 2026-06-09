@@ -240,14 +240,18 @@ class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
             perm_diff = f"\n{perm_diff_dict}"
         else:
             perm_diff = ""
+        if team.units_map != best_perm_def.units_map:
+            diff_dicts(first=team.units_map, second=best_perm_def.units_map,
+                                first_heading="forgejo", second_heading="closest")
+            units_diff = f"\n{perm_diff_dict}"
+        else:
+            units_diff = ""
 
         fg_print.warning(
             f"No exact role match found for existing Forejo team {team.name}. "
             f"Closest role is {best_role}, "
             f"{perm_diff}"
-            f"\n{diff_dicts(first=team.units_map, second=best_perm_def.units_map,
-                            first_heading="forgejo", second_heading="closest")}"
-
+            f"{units_diff}"
         )
 
         role = best_role
