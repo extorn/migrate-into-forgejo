@@ -2,62 +2,61 @@
 #
 # pylint: disable=line-too-long
 """
-Usage: create_push_mirrors.py [--to-forgejo] [--to-gitlab] [--all] [--limit LIMIT] (--create | --delete)
+Usage: create_push_mirrors.py [--debug] (--to-forgejo | --to-gitlab | --all) (--create | --delete)
        create_push_mirrors.py --help
 
 Create push mirrors from GitLab to Forgejo and vice versa.
 
 Options
   -h, --help     Show this screen
+  --debug        extra detailed console logging
   --to-forgejo   create mirrors from GitLab to Forgejo
   --to-gitlab    create mirrors from Forgejo to GitLab
   --all          create mirrors in both directions
-  --limit LIMIT  limit number of projects [default: 100000]
   --create       create mirrors
   --delete       delete mirrors
 """
 # pylint: enable=line-too-long
 
-import os
 import configparser
+import os
+import sys
 
 from docopt import docopt
 
+from fg_migration.adapters.gitlab_types import GitLabApiBuilder
 from fg_migration.utils import fg_print
 from fg_migration.core.config_types import ForgejoConfig, GitLabConfig
 from fg_migration.adapters.forgeo_types import ForgejoApiBuilder
-from fg_migration.adapters.source_gitlab import GitLabApiBuilder
 from fg_migration.services.push_mirror_creator import PushMirrorCreator
 
 SCRIPT_VERSION = "0.2"
 
-#######################
-# CONFIG SECTION START
-#######################
-if not os.path.exists(".migrate.ini"):
-    fg_print.error("Please create .migrate.ini as explained in the README")
-    os.sys.exit()
-
-
-config = configparser.RawConfigParser()
-config.read(".migrate.ini")
-forgejo_config = ForgejoConfig.from_config(config=config)
-gitlab_config = GitLabConfig.from_config(config=config)
-
-#######################
-# CONFIG SECTION END
-#######################
-
-
 
 def main():
     """Main function"""
+    #######################
+    # CONFIG SECTION START
+    #######################
+    if not os.path.exists(".migrate.ini"):
+        fg_print.error("Please create .migrate.ini as explained in the README")
+        sys.exit(1)
 
-    _args = docopt(__doc__)
-    args = {k.replace("--", ""): v for k, v in _args.items()}
+
+    config = configparser.RawConfigParser()
+    config.read(".migrate.ini")
+    forgejo_config = ForgejoConfig.from_config(config=config)
+    gitlab_config = GitLabConfig.from_config(config=config)
+
+    #######################
+    # CONFIG SECTION END
+    #######################
+
+    parsed_args = docopt(__doc__)
+    args = {k.replace("--", ""): v for k, v in parsed_args.items()}
     # control debug logging
     if args["debug"]:
-        fg_print.IS_DEBUG=True
+        fg_print.IS_DEBUG = True
 
     fg_print.print_color(
         fg_print.Bcolors.HEADER,
@@ -72,34 +71,20 @@ def main():
 
     fg_api_builder = ForgejoApiBuilder(forgejo_config=forgejo_config)
     fg_api = fg_api_builder.build_forgejo_api_client()
-    fg_conn_success= fg_api_builder.test_forgejo_connection(fg_api=fg_api)
+    fg_conn_success = fg_api_builder.test_forgejo_connection(fg_api=fg_api)
 
     if not (gl_conn_success and fg_conn_success):
-        os.sys.exit()
+        sys.exit(1)
 
-
-    #
-    # Load projects
-    #
-
-    limit = int(args["limit"])
-
-    if limit != 100000:
-        projects = gl_api.projects.list(
-            all=False,
-            per_page=limit,
-            page=1,
-        )
-    else:
-        projects = gl_api.projects.list(get_all=True)
-
-    fg_print.info(f"Found {len(projects)} projects")
 
     #
     # Execute actions
     #
 
-    pmc = PushMirrorCreator(fg_api=fg_api, forgejo_config=forgejo_config, gitlab_config=gitlab_config)
+    pmc = PushMirrorCreator(fg_api=fg_api, gl_api=gl_api, forgejo_config=forgejo_config,
+                            gitlab_config=gitlab_config)
+
+    projects = pmc.load_gitlab_projects()
 
     if args["create"]:
 
@@ -122,10 +107,7 @@ def main():
             pmc.delete_to_gitlab(projects)
 
     else:
-        fg_print.error(
-            "Please specify --create or --delete"
-        )
-        os.sys.exit()
+        raise AssertionError("unreachable")
 
     #
     # Summary
@@ -146,7 +128,8 @@ def main():
         fg_print.info("Failed elements:")
 
         print(*fg_print.GLOBAL_ERROR_LIST, sep="\n")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

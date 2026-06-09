@@ -113,7 +113,7 @@ class ForgejoDestination:
     def iter_forgejo_labels(self, owner: str, repo: str) -> Iterator[Label]:
         """an iterator over all labels for a repository"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=self.forgejo_config.API_MAX_PAGE_SIZE,
                                  items_type="Labels",retrieval_detail=f" for project {repo}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.issue.list_labels(
@@ -129,7 +129,7 @@ class ForgejoDestination:
     def iter_forgejo_milestones(self, owner: str, repo: str) -> Iterator[Milestone]:
         """get milestones for a repository"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=self.forgejo_config.API_MAX_PAGE_SIZE,
                                  items_type="Milestones",retrieval_detail=f" for project {repo}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.issue.get_milestones_list(
@@ -145,7 +145,7 @@ class ForgejoDestination:
     def iter_forgejo_issues(self, owner: str, repo: str) -> Iterator[Issue]:
         """get issues for a repository"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=self.forgejo_config.API_MAX_PAGE_SIZE,
                                  items_type="Issues",retrieval_detail=f" for project {repo}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.issue.list_issues(
@@ -161,7 +161,7 @@ class ForgejoDestination:
     def iter_forgejo_teams(self, org_name: str) -> Iterator[Team]:
         """get teams for an organization"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Teams",
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=self.forgejo_config.API_MAX_PAGE_SIZE, items_type="Teams",
                                  retrieval_detail=f" for organization {org_name}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.organization.org_list_teams(
@@ -177,7 +177,7 @@ class ForgejoDestination:
     def iter_forgejo_team_members(self, team: Team) -> Iterator[User]:
         """get members for a team"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Team Members",
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=self.forgejo_config.API_MAX_PAGE_SIZE, items_type="Team Members",
                                  retrieval_detail=f" for Team {team.name}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.organization.org_list_team_members(
@@ -192,7 +192,7 @@ class ForgejoDestination:
     def iter_forgejo_collaborators(self, owner_username: str, repo: str) -> Iterator[User]:
         """get collaborators for a repository"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=self.forgejo_config.API_MAX_PAGE_SIZE,
                                  items_type="Collaborators",retrieval_detail=f" for repo {repo}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.repository.repo_list_collaborators(
@@ -208,7 +208,7 @@ class ForgejoDestination:
     def iter_forgejo_user_keys(self, username : str) -> Iterator[PublicKey] :
         """get public keys for a user"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=self.forgejo_config.API_MAX_PAGE_SIZE,
                                  items_type="Public Keys",retrieval_detail=f" for user {username}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.user.list_keys(
@@ -223,7 +223,7 @@ class ForgejoDestination:
     def iter_forgejo_user_gpg_keys(self, username : str) -> Iterator[GpgKey] :
         """get gpg keys for a user"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=self.forgejo_config.API_MAX_PAGE_SIZE,
                                  items_type="GPG Keys",retrieval_detail=f" for user {username}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.user.user_list_gpg_keys(
@@ -240,7 +240,7 @@ class ForgejoDestination:
                                         repo_name:str) -> Iterator[Team]:
         """List all teams in a repository"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=self.forgejo_config.API_MAX_PAGE_SIZE,
                                  items_type="Teams",retrieval_detail=f" in Repository {repo_name}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.repository.repo_list_teams(
@@ -257,7 +257,7 @@ class ForgejoDestination:
     def iter_forgejo_organizations(self) -> Iterator[Organization]:
         """list all organizations in Forgejo"""
 
-        paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
+        paginator = ApiPaginator(fg_api=self.fg_api, page_size=self.forgejo_config.API_MAX_PAGE_SIZE,
                                  items_type="Organizations", retrieval_detail=" in Forgejo")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.organization.org_get_all(

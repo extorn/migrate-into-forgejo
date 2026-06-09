@@ -1,11 +1,16 @@
 """For creation of PushMirrors"""
 import os
+from typing import Iterator
 
-import gitlab
+import gitlab  # pip install python-gitlab
+import gitlab.v4 # pylint: disable=no-name-in-module
+import gitlab.v4.objects
 from pyforgejo import PushMirror, PyforgejoApi
 from pyforgejo.core import ApiError
 from requests import RequestException
 
+from fg_migration.adapters.forgeo_types import IterativeFetchError
+from fg_migration.adapters.gitlab_types import GitLabApiPaginator
 from fg_migration.utils import fg_print
 from fg_migration.core.config_types import ForgejoConfig, GitLabConfig
 
@@ -13,14 +18,44 @@ from fg_migration.core.config_types import ForgejoConfig, GitLabConfig
 class PushMirrorCreator:
     """For creation of PushMirrors"""
     fg_api : PyforgejoApi
+    gl_api : gitlab.Gitlab
     forgejo_config : ForgejoConfig
     gitlab_config : GitLabConfig
 
-    def __init__(self, fg_api:PyforgejoApi,
+    def __init__(self, fg_api:PyforgejoApi, gl_api:gitlab.Gitlab,
                  forgejo_config: ForgejoConfig, gitlab_config : GitLabConfig):
+        self.gl_api = gl_api
         self.forgejo_config = forgejo_config
         self.gitlab_config = gitlab_config
         self.forgejo_api = fg_api
+
+
+    def _iter_all_projects(self) -> Iterator[gitlab.v4.objects.Project]:
+        paginator = GitLabApiPaginator(gl_api=self.gl_api,
+                                       page_size=self.gitlab_config.API_MAX_PAGE_SIZE,
+                                       items_type="Projects")
+        return paginator.iterate(fetch_page_from_api=
+            lambda gl_api, page, limit: gl_api.projects.list(
+                page=page,
+                per_page=limit,
+            )
+        )
+
+
+    def load_gitlab_projects(self) -> list[gitlab.v4.objects.Project]:
+        """Load All Gitlab projects"""
+        all_projects : list[gitlab.v4.objects.Project] = []
+        try:
+            for project in self._iter_all_projects():
+                all_projects.append(project)
+        except IterativeFetchError:
+            fg_print.error("Failed to load all Projects. "
+                           "Push Mirror will need to be run again")
+            raise
+
+        fg_print.info(f"Found {len(all_projects)} projects")
+
+        return all_projects
 
 
 

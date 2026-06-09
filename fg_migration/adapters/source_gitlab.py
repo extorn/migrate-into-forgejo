@@ -61,7 +61,7 @@ class GitLabMigrationSource(MigrationSource):
                                  user: gitlab.v4.objects.User
                                  ) -> Iterator[gitlab.v4.objects.UserEmail]:
         paginator = GitLabApiPaginator(gl_api=self.gitlab_api,
-                                       page_size=50, items_type="UserEmails")
+                                       page_size=self.gitlab_config.API_MAX_PAGE_SIZE, items_type="UserEmails")
         return paginator.iterate(fetch_page_from_api=
             lambda gl_api, page, limit: user.emails.list(
                 page=page,
@@ -73,7 +73,7 @@ class GitLabMigrationSource(MigrationSource):
 
     def _iter_all_projects(self) -> Iterator[gitlab.v4.objects.Project]:
         paginator = GitLabApiPaginator(gl_api=self.gitlab_api,
-                                       page_size=50, items_type="Projects")
+                                       page_size=self.gitlab_config.API_MAX_PAGE_SIZE, items_type="Projects")
         return paginator.iterate(fetch_page_from_api=
             lambda gl_api, page, limit: gl_api.projects.list(
                 page=page,
@@ -87,7 +87,7 @@ class GitLabMigrationSource(MigrationSource):
                                     project: gitlab.v4.objects.Project
                                     ) -> Iterator[gitlab.v4.objects.Group]:
         paginator = GitLabApiPaginator(gl_api=self.gitlab_api,
-                                       page_size=50, items_type="Project Groups")
+                                       page_size=self.gitlab_config.API_MAX_PAGE_SIZE, items_type="Project Groups")
         return paginator.iterate(fetch_page_from_api=
             lambda gl_api, page, limit: project.groups.list(
                 page=page,
@@ -98,7 +98,7 @@ class GitLabMigrationSource(MigrationSource):
 
 
     def _iter_all_groups(self) -> Iterator[gitlab.v4.objects.Group]:
-        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="Groups")
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=self.gitlab_config.API_MAX_PAGE_SIZE, items_type="Groups")
         return paginator.iterate(fetch_page_from_api=
             lambda gl_api, page, limit: gl_api.groups.list(
                 page=page,
@@ -111,7 +111,7 @@ class GitLabMigrationSource(MigrationSource):
     def _iter_all_sub_groups_of_group(self, group:
                                    gitlab.v4.objects.Group
                                    ) -> Iterator[gitlab.v4.objects.GroupSubgroup]:
-        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="SubGroups")
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=self.gitlab_config.API_MAX_PAGE_SIZE, items_type="SubGroups")
         return paginator.iterate(fetch_page_from_api=
             lambda gl_api, page, limit: group.subgroups.list(
                 page=page,
@@ -124,7 +124,7 @@ class GitLabMigrationSource(MigrationSource):
     def _iter_all_descendant_groups_of_group(self, group:
                                    gitlab.v4.objects.Group
                                    ) -> Iterator[gitlab.v4.objects.GroupDescendantGroup]:
-        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50,
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=self.gitlab_config.API_MAX_PAGE_SIZE,
                                        items_type="DescendantGroups")
         return paginator.iterate(fetch_page_from_api=
             lambda gl_api, page, limit: group.descendant_groups.list(
@@ -138,7 +138,7 @@ class GitLabMigrationSource(MigrationSource):
     def _iter_all_members_of_group(self, group:
                                    gitlab.v4.objects.Group
                                    ) -> Iterator[gitlab.v4.objects.GroupMember]:
-        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="Groups")
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=self.gitlab_config.API_MAX_PAGE_SIZE, items_type="Groups")
         return paginator.iterate(fetch_page_from_api=
             lambda gl_api, page, limit: group.members.list(
                 page=page,
@@ -152,7 +152,7 @@ class GitLabMigrationSource(MigrationSource):
                                      project: gitlab.v4.objects.Project
                                      ) -> Iterator[gitlab.v4.objects.ProjectMember]:
         paginator = GitLabApiPaginator(gl_api=self.gitlab_api,
-                                       page_size=50, items_type="Project Members")
+                                       page_size=self.gitlab_config.API_MAX_PAGE_SIZE, items_type="Project Members")
         return paginator.iterate(fetch_page_from_api=
             lambda gl_api, page, limit: project.members.list(
                 page=page,
@@ -163,7 +163,7 @@ class GitLabMigrationSource(MigrationSource):
 
 
     def _iter_all_users(self) -> Iterator[gitlab.v4.objects.User]:
-        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="Users")
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=self.gitlab_config.API_MAX_PAGE_SIZE, items_type="Users")
         return paginator.iterate(fetch_page_from_api=
             lambda gl_api, page, limit: gl_api.users.list(
                 page=page,
@@ -176,7 +176,7 @@ class GitLabMigrationSource(MigrationSource):
                                    user:gitlab.v4.objects.User
                                    ) -> Iterator[gitlab.v4.objects.UserGPGKey]:
         paginator = GitLabApiPaginator(gl_api=self.gitlab_api,
-                                       page_size=50, items_type="UserGPGKeys")
+                                       page_size=self.gitlab_config.API_MAX_PAGE_SIZE, items_type="UserGPGKeys")
         return paginator.iterate(fetch_page_from_api=
             lambda gl_api, page, limit: user.gpgkeys.list(
                 page=page,
@@ -189,7 +189,7 @@ class GitLabMigrationSource(MigrationSource):
     def _iter_all_public_keys_of_user(self,
                                       user:gitlab.v4.objects.User
                                       ) -> Iterator[gitlab.v4.objects.UserKey]:
-        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=50, items_type="UserKeys")
+        paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=self.gitlab_config.API_MAX_PAGE_SIZE, items_type="UserKeys")
         return paginator.iterate(fetch_page_from_api=
             lambda gl_api, page, limit: user.keys.list(
                 page=page,

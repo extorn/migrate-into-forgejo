@@ -22,6 +22,7 @@ Options
 """
 import os
 import configparser
+import sys
 
 from docopt import docopt
 
@@ -37,36 +38,35 @@ from fg_migration.services.migrator import Migrator
 
 from fg_migration.utils import fg_print
 
-SCRIPT_VERSION = "1.0.0-alpha.2"
+SCRIPT_VERSION = "1.0.0"
 
 
-
-#######################
-# CONFIG SECTION START
-#######################
-if not os.path.exists(".migrate.ini"):
-    fg_print.info("Please create .migrate.ini as explained in the README")
-    os.sys.exit()
-
-config = configparser.RawConfigParser()
-config.read(".migrate.ini")
-migration_config = MigrationConfig.from_config(config=config)
-forgejo_config = ForgejoConfig.from_config(config=config)
-gitlab_config = GitLabConfig.from_config(config=config)
-migration_config_gitlab = GitLabMigrationConfig.from_config(config=config)
-
-#######################
-# CONFIG SECTION END
-#######################
-
-
-def main():
+def main() -> int:
     """Main function"""
-    _args = docopt(__doc__)
-    args = {k.replace("--", ""): v for k, v in _args.items()}
+
+    #######################
+    # CONFIG SECTION START
+    #######################
+    if not os.path.exists(".migrate.ini"):
+        fg_print.error("Please create .migrate.ini as explained in the README")
+        return 1
+
+    config = configparser.RawConfigParser()
+    config.read(".migrate.ini")
+    migration_config = MigrationConfig.from_config(config=config)
+    forgejo_config = ForgejoConfig.from_config(config=config)
+    gitlab_config = GitLabConfig.from_config(config=config)
+    migration_config_gitlab = GitLabMigrationConfig.from_config(config=config)
+
+    #######################
+    # CONFIG SECTION END
+    #######################
+
+    parsed_args = docopt(__doc__)
+    args = {k.replace("--", ""): v for k, v in parsed_args.items()}
     # control debug logging
     if args["debug"]:
-        fg_print.IS_DEBUG=True
+        fg_print.IS_DEBUG = True
 
     fg_print.print_color(
         fg_print.Bcolors.HEADER, "---=== Migration to Forgejo ===---"
@@ -89,7 +89,7 @@ def main():
     fg_conn_success= fg_api_builder.test_forgejo_connection(fg_api=fg_api)
 
     if not (gl_conn_success and fg_conn_success):
-        os.sys.exit()
+        return 1
 
     migration_dest : ForgejoDestination = ForgejoDestination(fg_api=fg_api,
                                                              forgejo_config=forgejo_config)
@@ -98,28 +98,28 @@ def main():
                         migration_dest=migration_dest,
                         fg_api_builder=fg_api_builder)
 
+    run_users = args["users"] or args["all"]
+    run_groups = args["groups"] or args["all"]
+    run_projects = args["projects"] or args["all"]
+    run_membership = args["membership"] or args["all"]
+
+    # IMPORT NOTHING ?
+    if not (run_users or run_groups or run_projects or run_membership):
+        fg_print.info("")
+        fg_print.warning("No migration option(s) selected, nothing to do")
+        return 0
+
     # IMPORT System Users
-    if args["users"] or args["all"]:
-        migrator.import_users()
+    if run_users:
+        migrator.import_users(notify=args["notify"])
     # IMPORT Organizations and Teams (Groups and their member Users)
-    if args["groups"] or args["all"]:
+    if run_groups:
          # Note, import_groups uses the gitlab projects object
          # because they're intrinsically linked really.
         migrator.import_organizations()
     # IMPORT Repositories (Projects) AND OR Collaborators (Memberships of Projects)
-    if args["projects"] or args["membership"] or args["all"]:
-        migrator.import_repos(import_repo_content=(args["projects"] or args["all"]))
-    # IMPORT NOTHING ?
-    if (
-        not args["users"]
-        and not args["groups"]
-        and not args["projects"]
-        and not args["membership"]
-        and not args["all"]
-    ):
-        fg_print.info("")
-        fg_print.warning("No migration option(s) selected, nothing to do")
-        os.sys.exit()
+    if run_projects or run_membership:
+        migrator.import_repos(import_repo_content=run_projects)
 
     fg_print.info("")
     if fg_print.GLOBAL_ERROR_COUNT == 0:
@@ -128,6 +128,8 @@ def main():
         fg_print.error(f"Migration finished with {fg_print.GLOBAL_ERROR_COUNT} errors")
         fg_print.info("Failed elements:")
         print(*fg_print.GLOBAL_ERROR_LIST, sep="\n")
+        return 1
+    return 0
 
 
 
@@ -139,4 +141,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

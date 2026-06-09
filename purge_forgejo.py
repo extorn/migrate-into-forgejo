@@ -28,14 +28,14 @@ from fg_migration.core.config_types import ForgejoConfig
 from fg_migration.services.fg_purger import ForgejoPurger
 from fg_migration.adapters.forgeo_types import ForgejoApiBuilder
 
-SCRIPT_VERSION = "1.0.0-alpha.1"
+SCRIPT_VERSION = "1.0.0"
 
 #######################
 # CONFIG SECTION START
 #######################
 if not os.path.exists(".migrate.ini"):
     fg_print.error("Please create .migrate.ini as explained in the README")
-    os.sys.exit()
+    os.sys.exit(1)
 
 config = configparser.RawConfigParser()
 config.read(".migrate.ini")
@@ -51,14 +51,14 @@ def ask_confirmation() -> None:
     choice = confirm("Do you want continue?")
     if not choice:
         fg_print.info("No action taken.")
-        os.sys.exit()
+        os.sys.exit(0)
 
 
 
 if __name__ == "__main__":
     #print(repr(__doc__))
-    _args = docopt(__doc__)
-    args = {k.replace("--", ""): v for k, v in _args.items()}
+    parsed_args = docopt(__doc__)
+    args = {k.replace("--", ""): v for k, v in parsed_args.items()}
     # control debug logging
     if args["debug"]:
         fg_print.IS_DEBUG=True
@@ -67,7 +67,7 @@ if __name__ == "__main__":
                 args["user-repos"], args["current-repos"],
                 args["users"], args["all"]]):
         fg_print.error("Please specify what to delete! You can use --help for more information.")
-        os.sys.exit()
+        os.sys.exit(1)
 
 
     ask_confirmation()
@@ -76,7 +76,7 @@ if __name__ == "__main__":
     fg_api = fg_api_builder.build_forgejo_api_client()
     fg_conn_success = fg_api_builder.test_forgejo_connection(fg_api=fg_api)
     if not fg_conn_success:
-        os.sys.exit()
+        os.sys.exit(1)
     purger = ForgejoPurger(fg_api=fg_api, forgejo_config=forgejo_config)
 
 

@@ -85,10 +85,10 @@ class GitLabApiBuilder:
         except gitlab.GitlabAuthenticationError:
             fg_print.error("Failed to authenticate with GitLab! Check "
                            "access token and client authentication settings in .migrate.ini")
-            os.sys.exit()
+            os.sys.exit(1)
         except (gitlab.GitlabError, requests.exceptions.RequestException) as e:
             fg_print.error(f"Failed to connect to GitLab! {e}")
-            os.sys.exit()
+            os.sys.exit(1)
         assert isinstance(gl.user, gitlab.v4.objects.CurrentUser)
         return gl
 

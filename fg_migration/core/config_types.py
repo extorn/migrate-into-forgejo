@@ -55,6 +55,7 @@ class ForgejoConfig:
     FORGEJO_URL : str
     FORGEJO_API_URL : str
     FORGEJO_API_TOKEN : str
+    API_MAX_PAGE_SIZE : int
 
 
     @classmethod
@@ -71,6 +72,8 @@ class ForgejoConfig:
             FORGEJO_URL = forgejo_website_url,
             FORGEJO_API_URL = f"{forgejo_website_url.rstrip('/')}/api/v1",
             FORGEJO_API_TOKEN = config.get(section, option="forgejo_token"),
+            API_MAX_PAGE_SIZE = config.getint(section, option="forgejo_api_max_page_size",
+                                                     fallback=50),
         )
 
 
@@ -85,6 +88,7 @@ class GitLabConfig:
     GITLAB_ADMIN_USER : str | None
     GITLAB_ADMIN_PASS : str | None
     GITLAB_SYNC_CONNECTION_TYPE : str | None
+    API_MAX_PAGE_SIZE : int
     MAX_DESCENDANT_GROUP_DEPTH : int = 20 #TODO expose to a config (20 is GitLab documented max)
     MAX_SUB_GROUP_DEPTH : int = 20 #TODO expose to a config (20 is GitLab documented max)
 
@@ -102,6 +106,8 @@ class GitLabConfig:
             GITLAB_ADMIN_PASS = config.get(section, option="gitlab_admin_pass", fallback=None),
             GITLAB_SYNC_CONNECTION_TYPE = config.get(section, option="gitlab_sync_connection_type",
                                                      fallback="https"),
+            API_MAX_PAGE_SIZE = config.getint(section, option="gitlab_api_max_page_size",
+                                                     fallback=50),
 
         )
 

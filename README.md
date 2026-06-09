@@ -1,12 +1,6 @@
-# Any Source Control System to Forgejo migration script
+# Automated Migration to Forgejo for Users,Organizations,Teams,Repositories,...
 
 \*\*Currently only gitlab support is implemented, but implementing support for others in a modular way is possible.
-
-# **WARNING:**
-
-**This is under active development (06/06/2026)**,
-
-Let me know if you're interested in this code
 
 ## Preamble
 
@@ -54,7 +48,8 @@ python3 -m pip install -r requirements.txt
 and you call the scripts using `--help`:
 
 *   `./migrate.py --help`
-*   `./create_push_mirrors.py --help`
+*   `./purge_forgejo.py --help`
+*   `./create_push_mirrors.py --help`  \***NOTE**: **I have not used this script, it might work, it might not.**
 
 ## Configuration Files
 
@@ -110,7 +105,8 @@ forgejo_token = <your-forgejo-token>
 ### If forgejo_client_auth_cert is provided, client authentication is switched on
 #forgejo_client_auth_cert = /path/to/forgejo_client_auth_cert.pem
 #forgejo_client_auth_key = /path/to/forgejo_client_auth_key.pem
-
+# Max records to retrieve in a single API call to Forgejo
+#forgejo_api_max_page_size=50
 
 
 [gitlab]
@@ -129,7 +125,8 @@ gitlab_admin_pass = <your-gitlab-password>
 ### If gitlab_client_auth_cert is provided, client authentication is switched on
 #gitlab_client_auth_cert = /path/to/gitlab_client_auth_cert.pem
 #gitlab_client_auth_key = /path/to/gitlab_client_auth_key.pem
-
+# Max records to retrieve in a single API call to GitLab
+#gitlab_api_max_page_size=50
 
 [migrate]
 
@@ -162,10 +159,9 @@ gitlab_admin_pass = <your-gitlab-password>
 ### Define how the Organizations, Teams and Users are created (see comments in strategies files for examples)
 # Pick one of [access_level,strict_access_level,no_teams,preserve_existing_teams,flatten_source_team_hierarchy]
 #
-# Warning, strategy not yet working as described : preserve_existing_teams,
-#
 # If you encounter a bug in a strategy, please let me know so it can be fixed for other people (ideally, send me a fix ;-) ).
 #
+# Note: I recommend that you create a user just for the migration process if using strategy: preserve_existing_teams
 #access_mapping_strategy=access_level
 
 
@@ -183,7 +179,7 @@ gitlab_admin_pass = <your-gitlab-password>
 
 This is a fork of [https://github.com/GEANT/gitlab-to-forgejo,](https://github.com/GEANT/gitlab-to-forgejo,) but the changes are now so substantial that it isn't mergeable upstream as a 'patch' any more.
 
-Changes:
+Some of the key Changes:
 
 *   ~I've re-added support for issues, milestones and labels, though don't use these myself.~
 *   I've added support for gitlab client certificate authentication (for when the server is behind a proxy enforcing this)
@@ -193,7 +189,9 @@ Changes:
 *   Added support for user PGP and GPG key import, though don't use these myself.
 *   **Added support for importing Organization Teams and Users to match GitLab Users and Gitlab Groups, assigning using Roles based on gitlab access level.**
 *   **Added support for applying Collaboration entries for Repositories based on the Users' membership of Gitlab Group and or Project**
+*   **Multiple strategies exist for migration of  Teams and Users (pick in config file). To add your own shouldn't be too taxing**
 *   **Added support for User avatar migration**
+*   Adding a different source to migrate from is now much easier, just implement your own MigrationSource class and swap from GitLabMigrationSource in migrate.py.
 
 Note:
 
