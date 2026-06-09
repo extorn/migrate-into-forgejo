@@ -1,7 +1,6 @@
 """contains the DirectCollaboratorOnlyStrategy class"""
 from copy import deepcopy
 from typing import override
-from warnings import deprecated
 
 from pyforgejo import Team
 
@@ -20,7 +19,6 @@ from fg_migration.utils import fg_print
 from fg_migration.utils.utils import name_clean
 
 
-@deprecated("Untested, possibly incomplete")
 class FlattenedHierarchyStrategy(BaseAccessMappingStrategy):
     """
 Access mapping strategy that derives Forgejo teams from source-system
