@@ -207,7 +207,7 @@ class GitLabMigrationSource(MigrationSource):
             return False
         else:
             fg_print.error(f"Unsupported namespace kind {project.namespace['kind']}"
-                           f" for project {project.name}, skipping import!")
+                           f" for project {project.name}, skipping import")
             raise ValueError(f"namespace unsupported {project.namespace['kind']}")
 
 
@@ -223,7 +223,7 @@ class GitLabMigrationSource(MigrationSource):
             return project.namespace["path"]
 
         fg_print.error(f"Unsupported namespace kind {project.namespace['kind']}"
-                       f" for project {project.name}, skipping import!")
+                       f" for project {project.name}, skipping import")
         return None
 
 
@@ -301,7 +301,7 @@ class GitLabMigrationSource(MigrationSource):
                 repo_name = self._get_gitlab_repo_name(project)
                 if repo_name is None:
                     fg_print.error(f"Could not extract repository name for project {project.name}"
-                                   f" with path {project.path_with_namespace}, skipping import!")
+                                   f" with path {project.path_with_namespace}, skipping import")
                     continue
                 clone_url = self._build_gitlab_repo_url(owner_name, repo_name)
 
@@ -403,7 +403,7 @@ class GitLabMigrationSource(MigrationSource):
                     else:
                         fg_print.warning(f"Likely a GitLab specific system user "
                                             f"{group_member.username}. "
-                                            "Can possibly be deleted after import!")
+                                            "Can possibly be deleted after import")
 
                 repo_accessors_members.append(CanonicalRepoMembership(
                                                 username = group_member.username,
@@ -466,7 +466,7 @@ class GitLabMigrationSource(MigrationSource):
                     else:
                         fg_print.warning("Likely a GitLab specific system user "
                                          f"{project_member.username}. "
-                                         "Can possibly be deleted after import!")
+                                         "Can possibly be deleted after import")
                 fg_print.debug(f"Added accessor {project_member.username}"
                                f" for project {project.path}")
                 repo_accessors_members.append(CanonicalRepoMembership(
@@ -606,7 +606,7 @@ class GitLabMigrationSource(MigrationSource):
                         continue
                     else:
                         fg_print.warning(f"Likely a GitLab specific system user {user.username}."
-                                         " Can possibly be deleted after import!")
+                                         " Can possibly be deleted after import")
 
                 # gpg_keys : list[gitlab.v4.objects.UserGPGKey] = user.gpgkeys.list(get_all=True)
                 # keys: list[gitlab.v4.objects.UserKey] = user.keys.list(get_all=True)

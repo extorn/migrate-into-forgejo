@@ -121,7 +121,7 @@ class Migrator:
     #                                               repo=forgejo_safe_project_name,
     #                                               name=label.name, color=label.color,
     #                                               description=label.description)
-    #                 fg_print.info(f"Label {label.name} imported!")
+    #                 fg_print.info(f"Label {label.name} imported")
     #             except ConflictError:
     #                 continue # already exists :-)
     #             except Exception as e:
@@ -235,7 +235,7 @@ class Migrator:
     #                     fg_print.error(
     #                         f"Milestone {issue.milestone['title']} assigned to "
     #                         f"issue {issue.title} does not exist in Forgejo, skipping milestone"
-    #                         f" assignment for this issue!",
+    #                         f" assignment for this issue",
     #                         f"Failed to import issue {issue.title} for project "
     #                         f"{forgejo_safe_project_name} in Forgejo",
     #                     )
@@ -258,7 +258,7 @@ class Migrator:
     #                 else:
     #                     fg_print.error(
     #                         f"Label {label} assigned to issue {issue.title} does not exist"
-    #                          " in Forgejo, skipping label assignment for this issue!",
+    #                          " in Forgejo, skipping label assignment for this issue",
     #                         f"Failed to import issue {issue.title} for project {repo} in Forgejo",
     #                     )
     #                     missing_label = True
@@ -277,7 +277,7 @@ class Migrator:
     #                                         milestone=forgejo_milestoneId,
     #                                         labels=forgejo_issue_label_ids,
     #                                         due_on=due_date, closed=issue.state == "closed")
-    #                 fg_print.info(f"Issue {issue.title} imported!")
+    #                 fg_print.info(f"Issue {issue.title} imported")
     #             except Exception as e:
     #                 detail = self.migration_dest._get_exception_detail(e)
     #                 fg_print.error(
@@ -299,7 +299,7 @@ class Migrator:
             fg_print.error(
                 f"Importing {source_repo.source_system} {source_repo.name}."
                 f" Failed to locate Forgejo repository owner {source_repo.get_safe_owner_name()}"
-                f" for repository {source_repo.get_safe_username()}, skipping import!",
+                f" for repository {source_repo.get_safe_username()}, skipping import",
                 f"Importing {source_repo.source_system} {source_repo.name}."
                 f" Failed to locate Forgejo repository owner for repository "
                 f"{source_repo.get_safe_username()}")
@@ -310,7 +310,7 @@ class Migrator:
             fg_print.error(
                 f"Importing {source_repo.source_system} {source_repo.name}. Located"
                 f" incomplete Forgejo repository owner {source_repo.get_safe_owner_name()}"
-                f" for repository {source_repo.get_safe_username()}, skipping import!",
+                f" for repository {source_repo.get_safe_username()}, skipping import",
                 f"Importing {source_repo.source_system} {source_repo.name}. "
                 f"Located incomplete Forgejo repository owner for repository"
                 f" {source_repo.get_safe_username()}")
@@ -339,7 +339,7 @@ class Migrator:
                 fg_print.info(
                     f"{source_repo.source_system} {source_repo.source_type}"
                     f" {source_repo.get_safe_username()} imported from {source_repo.clone_url}"
-                    f" and available at {imported_repo.clone_url}!")
+                    f" and available at {imported_repo.clone_url}")
 
 
 
@@ -546,9 +546,9 @@ class Migrator:
                                                 existing_forgejo_org=existing_forgejo_org)
             if not added_org:
                 fg_print.error("Skipping adding teams for Organization "
-                               f"{organization.get_safe_username()} that does not exist!",
+                               f"{organization.get_safe_username()} that does not exist",
                                "Skipping adding teams for Organization "
-                               f"{organization.get_safe_username()} that does not exist!")
+                               f"{organization.get_safe_username()} that does not exist")
                 continue # org does not exist
 
             # Finally, import those group members

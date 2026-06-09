@@ -34,7 +34,7 @@ SCRIPT_VERSION = "1.0.0-alpha.1"
 # CONFIG SECTION START
 #######################
 if not os.path.exists(".migrate.ini"):
-    fg_print.error("Please create .migrate.ini as explained in the README!")
+    fg_print.error("Please create .migrate.ini as explained in the README")
     os.sys.exit()
 
 config = configparser.RawConfigParser()
@@ -47,7 +47,7 @@ forgejo_config = ForgejoConfig.from_config(config=config)
 
 def ask_confirmation() -> None:
     """Ask for confirmation before proceeding"""
-    fg_print.info("This script deletes your data. Be warned!")
+    fg_print.info("This script deletes your data. Be warned")
     choice = confirm("Do you want continue?")
     if not choice:
         fg_print.info("No action taken.")
@@ -95,8 +95,8 @@ if __name__ == "__main__":
 
     ERR_COUNT = fg_print.GLOBAL_ERROR_COUNT
     if ERR_COUNT == 0:
-        fg_print.success("Purge finished with no errors!")
+        fg_print.success("Purge finished with no errors")
     else:
-        fg_print.error(f"Purge finished with {ERR_COUNT} errors!")
+        fg_print.error(f"Purge finished with {ERR_COUNT} errors")
         print("Failed elements:")
         print(*fg_print.GLOBAL_ERROR_LIST, sep="\n")

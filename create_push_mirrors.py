@@ -35,7 +35,7 @@ SCRIPT_VERSION = "0.2"
 # CONFIG SECTION START
 #######################
 if not os.path.exists(".migrate.ini"):
-    fg_print.error("Please create .migrate.ini as explained in the README!")
+    fg_print.error("Please create .migrate.ini as explained in the README")
     os.sys.exit()
 
 
@@ -135,12 +135,12 @@ def main():
 
     if err_count == 0:
         fg_print.success(
-            "\nMirror management finished with no errors!"
+            "\nMirror management finished with no errors"
         )
     else:
         fg_print.error(
             f"\nMirror management finished with "
-            f"{err_count} errors!"
+            f"{err_count} errors"
         )
 
         fg_print.info("Failed elements:")

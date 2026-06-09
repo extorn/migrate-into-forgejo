@@ -114,7 +114,7 @@ class ForgejoDestination:
         """an iterator over all labels for a repository"""
 
         paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
-                                 items_type="Labels",retrieval_detail=f" for project {repo}!")
+                                 items_type="Labels",retrieval_detail=f" for project {repo}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.issue.list_labels(
                 owner=owner,
@@ -130,7 +130,7 @@ class ForgejoDestination:
         """get milestones for a repository"""
 
         paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
-                                 items_type="Milestones",retrieval_detail=f" for project {repo}!")
+                                 items_type="Milestones",retrieval_detail=f" for project {repo}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.issue.get_milestones_list(
                 owner=owner,
@@ -146,7 +146,7 @@ class ForgejoDestination:
         """get issues for a repository"""
 
         paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
-                                 items_type="Issues",retrieval_detail=f" for project {repo}!")
+                                 items_type="Issues",retrieval_detail=f" for project {repo}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.issue.list_issues(
                 owner=owner,
@@ -162,7 +162,7 @@ class ForgejoDestination:
         """get teams for an organization"""
 
         paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Teams",
-                                 retrieval_detail=f" for organization {org_name}!")
+                                 retrieval_detail=f" for organization {org_name}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.organization.org_list_teams(
                 org=org_name,
@@ -178,7 +178,7 @@ class ForgejoDestination:
         """get members for a team"""
 
         paginator = ApiPaginator(fg_api=self.fg_api, page_size=50, items_type="Team Members",
-                                 retrieval_detail=f" for Team {team.name}!")
+                                 retrieval_detail=f" for Team {team.name}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.organization.org_list_team_members(
                 id=team.id,
@@ -193,7 +193,7 @@ class ForgejoDestination:
         """get collaborators for a repository"""
 
         paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
-                                 items_type="Collaborators",retrieval_detail=f" for repo {repo}!")
+                                 items_type="Collaborators",retrieval_detail=f" for repo {repo}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.repository.repo_list_collaborators(
                 owner=owner_username,
@@ -209,7 +209,7 @@ class ForgejoDestination:
         """get public keys for a user"""
 
         paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
-                                 items_type="Public Keys",retrieval_detail=f" for user {username}!")
+                                 items_type="Public Keys",retrieval_detail=f" for user {username}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.user.list_keys(
                 username=username,
@@ -224,7 +224,7 @@ class ForgejoDestination:
         """get gpg keys for a user"""
 
         paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
-                                 items_type="GPG Keys",retrieval_detail=f" for user {username}!")
+                                 items_type="GPG Keys",retrieval_detail=f" for user {username}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.user.user_list_gpg_keys(
                 username=username,
@@ -241,7 +241,7 @@ class ForgejoDestination:
         """List all teams in a repository"""
 
         paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
-                                 items_type="Teams",retrieval_detail=f" in Repository {repo_name}!")
+                                 items_type="Teams",retrieval_detail=f" in Repository {repo_name}")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.repository.repo_list_teams(
                 owner=owner_username,
@@ -258,7 +258,7 @@ class ForgejoDestination:
         """list all organizations in Forgejo"""
 
         paginator = ApiPaginator(fg_api=self.fg_api, page_size=50,
-                                 items_type="Organizations", retrieval_detail=" in Forgejo!")
+                                 items_type="Organizations", retrieval_detail=" in Forgejo")
         return paginator.iterate(fetch_page_from_api=
             lambda fg_api, page, limit: fg_api.organization.org_get_all(
                 page=page,
@@ -277,7 +277,7 @@ class ForgejoDestination:
             forgejo_org = self.fg_api.organization.org_get(org=org.get_safe_username())
             fg_print.debug(f"Loaded organization {forgejo_org.username} ({forgejo_org.full_name})"
                            f" matching {org.source_system}"
-                           f" {org.source_type} {org.username}!")
+                           f" {org.source_type} {org.username}")
             return forgejo_org
         except NotFoundError:
             msg=f"Organization not found : {org.get_safe_username()}"
@@ -302,7 +302,7 @@ class ForgejoDestination:
             #               f" for gitlab project {project.name}...")
             org = self.fg_api.organization.org_get(org_name)
             fg_print.debug(f"Loaded organization {org.full_name} for {repo.source_system}"
-                           f" {repo.source_type} {repo.name}!")
+                           f" {repo.source_type} {repo.name}")
             return org
         except (NotFoundError, ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
@@ -317,7 +317,7 @@ class ForgejoDestination:
         """get user by name"""
         try:
             user = self.fg_api.user.get(username)
-            fg_print.debug(f"loaded user {user.username}!")
+            fg_print.debug(f"loaded user {user.username}")
             return user
         except (NotFoundError, ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
@@ -331,7 +331,7 @@ class ForgejoDestination:
         try:
             user = self.fg_api.user.get(username)
             fg_print.warning(f"User {user.login}, (name '{user.full_name}') "
-                             "already exists in Forgejo, skipping!")
+                             "already exists in Forgejo, skipping")
             return True
         except NotFoundError:
             return False
@@ -352,12 +352,12 @@ class ForgejoDestination:
                                                          repo=repo.get_safe_username())
             if repository is not None:
                 fg_print.warning(f"{repo.source_type} {repo.name}"
-                                  " already exists in Forgejo, skipping!")
+                                  " already exists in Forgejo, skipping")
             return True
         except NotFoundError:
             fg_print.info(f"{repo.get_safe_username()} owned by {forgejo_owner.username} "
                           f"from {repo.source_type} {repo.username} not found "
-                          "in Forgejo, importing!")
+                          "in Forgejo, importing")
             return False
         except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
@@ -365,7 +365,7 @@ class ForgejoDestination:
                            f"exists in Forgejo for owner {forgejo_owner.username}! {detail}")
 
 
-        fg_print.info(f"{repo.source_type} {repo.name} not found in Forgejo, importing!")
+        fg_print.info(f"{repo.source_type} {repo.name} not found in Forgejo, importing")
         return False
 
 
@@ -382,14 +382,14 @@ class ForgejoDestination:
 
             if existing_label is not None:
                 fg_print.warning(
-                    f"Label {labelname} already exists in project {repo}, skipping!"
+                    f"Label {labelname} already exists in project {repo}, skipping"
                 )
                 return True
 
-            fg_print.info(f"Label {labelname} does not exist in project {repo}, importing!")
+            fg_print.info(f"Label {labelname} does not exist in project {repo}, importing")
             return False
 
-        fg_print.info(f"No labels in project {repo}, importing!")
+        fg_print.info(f"No labels in project {repo}, importing")
         return False
 
 
@@ -406,14 +406,14 @@ class ForgejoDestination:
 
             if existing_issue is not None:
                 fg_print.warning(
-                    f"Issue {issue_title} already exists in project {repo}, skipping!"
+                    f"Issue {issue_title} already exists in project {repo}, skipping"
                 )
                 return True
 
-            fg_print.info(f"Issue {issue_title} does not exist in project {repo}, importing!")
+            fg_print.info(f"Issue {issue_title} does not exist in project {repo}, importing")
             return False
 
-        fg_print.info(f"No issues in project {repo}, importing!")
+        fg_print.info(f"No issues in project {repo}, importing")
         return False
 
 
@@ -508,7 +508,7 @@ class ForgejoDestination:
                                                         collaborator = collaborator_username,
                                                         permission = permission)
             fg_print.debug(f"Collaboration on {repo.get_safe_username()} "
-                           f"for user {collaborator_username} recorded!")
+                           f"for user {collaborator_username} recorded")
         except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(f"Failed to add Collaboration for user {collaborator_username}"
@@ -600,7 +600,7 @@ class ForgejoDestination:
                 read_only=True,
                 title=key_name,
             )
-            fg_print.info(f"Public key {key_name} imported for user {username}!")
+            fg_print.info(f"Public key {key_name} imported for user {username}")
             return new_key
         except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
@@ -709,7 +709,7 @@ class ForgejoDestination:
                     armored_public_key=armored_public_key,
                     request_options=self._build_forgejo_sudo_request_options(username)
                 )
-            fg_print.info(f"GPG key {key_id} imported for user {username}!")
+            fg_print.info(f"GPG key {key_id} imported for user {username}")
             return new_key
         except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
@@ -778,7 +778,7 @@ class ForgejoDestination:
                     website="",
                 )
                 fg_print.info(f"{organization.source_type} {organization.username} "
-                              f"imported as Organization {organization.get_safe_username()}!")
+                              f"imported as Organization {organization.get_safe_username()}")
             except ConflictError:
                 return True # already exists
             except (ApiError, RequestException) as e:
@@ -840,7 +840,7 @@ class ForgejoDestination:
         try:
             self.fg_api.organization.org_add_team_member(team.id, username)
             fg_print.info(f"User {username} added to team {team.name}"
-                          f" of organization {organization_name}!")
+                          f" of organization {organization_name}")
         except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
@@ -1019,14 +1019,14 @@ class ForgejoDestination:
 
             fg_print.error( "Failed to retrieve Forgejo owner User for Forgejo repository"
                             f" {source_repo.get_safe_username()}, skipping import of "
-                            f"{source_repo.source_type} {source_repo.name}!")
+                            f"{source_repo.source_type} {source_repo.name}")
         else:
             if org := self.get_forgejo_organization_owner_of_repository(repo=source_repo):
                 return self._get_owner_identity(org)
 
             fg_print.error( "Failed to retrieve Forgejo owner organization for repository "
                             f"{source_repo.get_safe_username()}, skipping import of "
-                            f"{source_repo.source_type} {source_repo.name}!")
+                            f"{source_repo.source_type} {source_repo.name}")
         return None
 
 

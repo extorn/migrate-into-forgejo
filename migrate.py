@@ -45,7 +45,7 @@ SCRIPT_VERSION = "1.0.0-alpha.2"
 # CONFIG SECTION START
 #######################
 if not os.path.exists(".migrate.ini"):
-    fg_print.info("Please create .migrate.ini as explained in the README!")
+    fg_print.info("Please create .migrate.ini as explained in the README")
     os.sys.exit()
 
 config = configparser.RawConfigParser()
@@ -118,14 +118,14 @@ def main():
         and not args["all"]
     ):
         fg_print.info("")
-        fg_print.warning("No migration option(s) selected, nothing to do!")
+        fg_print.warning("No migration option(s) selected, nothing to do")
         os.sys.exit()
 
     fg_print.info("")
     if fg_print.GLOBAL_ERROR_COUNT == 0:
-        fg_print.success("Migration finished with no errors!")
+        fg_print.success("Migration finished with no errors")
     else:
-        fg_print.error(f"Migration finished with {fg_print.GLOBAL_ERROR_COUNT} errors!")
+        fg_print.error(f"Migration finished with {fg_print.GLOBAL_ERROR_COUNT} errors")
         fg_print.info("Failed elements:")
         print(*fg_print.GLOBAL_ERROR_LIST, sep="\n")
 
