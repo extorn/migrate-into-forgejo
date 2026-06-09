@@ -540,7 +540,7 @@ class Migrator:
 
             # fg_print.debug(f"Existing Forgejo organizations: "
             #                f"{[org.username for org in existing_forgejo_organizations]}")
-            fg_print.debug(f"Matched = {existing_forgejo_org is not None}")
+            fg_print.debug(f"Matched existing Organization = {existing_forgejo_org is not None}")
             # Add the forgejo organization
             added_org = self.migration_dest.forgejo_add_organization(
                                                 organization=organization,

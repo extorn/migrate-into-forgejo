@@ -183,6 +183,8 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
         # ---------------------------------------------------
         # STEP 2: materialise Forgejo teams
         # ---------------------------------------------------
+        fg_print.debug("materializing teams for organization"
+                       f" {organization.get_safe_username()}")
 
         for access_level, memberships in team_intent_map.items():
 
@@ -209,7 +211,7 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
         # ----------------------------------------------------------------------------
         # STEP 4: add any teams with no members defined in the teams config yaml file.
         # ----------------------------------------------------------------------------
-        if self.migration_config.ADD_EMPTY_TEAMS_TO_ORGANIZATIONS:
+        if self.migration_config.ADD_EMPTY_TEAMS_TO_ORGANIZATIONS is True:
             for possible_team in self.migration_dest.get_default_team_definitions():
                 if possible_team.name.lower() in existing_forgejo_org_teams_map:
                     # already existed before this operation started
@@ -433,7 +435,7 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
 
                     if len(member_usernames) == 0:
                         #if the team is empty....
-                        if not self.migration_config.ADD_EMPTY_TEAMS_TO_REPOSITORIES:
+                        if self.migration_config.ADD_EMPTY_TEAMS_TO_REPOSITORIES is not True:
                             # Don't add this one to the the repository unless user wanted
                             continue
 
@@ -546,13 +548,15 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
                           f" Team {matched_team.name}")
             return self.TeamMatchExactResult(matched_team=matched_team)
 
-        if self.migration_config.USE_EXISTING_TEAMS:
+        if self.migration_config.USE_EXISTING_TEAMS is True:
             fg_print.warning("Pre-existing team users will be granted access to new repositories"
                              " that are created with access granted to this team.\n"
                              f"Affected Forgejo Organization {organization.get_safe_username()}"
                              f" Team {matched_team.name}, usernames: {existing_usernames}")
             return self.TeamMatchExactResult(matched_team=matched_team)
 
+        # don't want to alter the existing team, rename it so we can create a new
+        # one using its name.
         result = self._rename_team_out_of_the_way(team = matched_team)
 
         return result
@@ -606,5 +610,5 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
         )
         if found is None:
             fg_print.debug(f"No existing team matching {team_key}"
-                           f" found in set !{list(existing_forgejo_teams_map.keys())}")
+                           f" found in set {set(existing_forgejo_teams_map.keys())}")
         return found

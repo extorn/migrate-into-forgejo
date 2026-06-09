@@ -310,7 +310,7 @@ class GitLabMigrationSource(MigrationSource):
                 auth_username=self.gitlab_config.GITLAB_ADMIN_USER
                 auth_token=self.gitlab_config.GITLAB_TOKEN
 
-                fg_print.debug(f"{project.path} : {project.name}")
+                fg_print.debug(f"{self.source_system} Project name {project.path} : path {project.name}")
                 repo = CanonicalRepo(source_system=self.source_system,
                                      source_id=project.get_id(),
                                      is_individual=is_individual,
@@ -336,7 +336,7 @@ class GitLabMigrationSource(MigrationSource):
     def _get_gitlab_repo_name(self, project: gitlab.v4.objects.Project) -> str|None:
         proj_path = project.path_with_namespace
 
-        fg_print.debug(f"Project: {proj_path}")
+        fg_print.debug(f"retrieving {self.source_system} project: {proj_path}")
 
         path_parts = proj_path.split("/", 1)
 
@@ -395,7 +395,7 @@ class GitLabMigrationSource(MigrationSource):
         try:
             for group_member in self._iter_all_members_of_group(group=group):
                 if self._is_ignore_gitlab_user(group_member.username):
-                    if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
+                    if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS is True:
                         fg_print.warning(f"Ignored a GitLab specific system user "
                                             f"{group_member.username}. If this is incorrect"
                                             ", rerun import permitting system user cloning")
@@ -458,7 +458,7 @@ class GitLabMigrationSource(MigrationSource):
         try:
             for project_member in self._iter_all_members_of_project(project=project):
                 if self._is_ignore_gitlab_user(project_member.username):
-                    if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
+                    if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS is True:
                         fg_print.warning("Ignored a GitLab specific system user "
                                          f"{project_member.username}. If this is incorrect, rerun "
                                          "import permitting system user cloning")
@@ -516,7 +516,7 @@ class GitLabMigrationSource(MigrationSource):
 
                 # handle ignored users
                 if self._is_ignore_gitlab_user(member.username):
-                    if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
+                    if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS is True:
                         fg_print.warning(
                             f"Ignored GitLab system user {member.username}"
                         )
@@ -599,7 +599,7 @@ class GitLabMigrationSource(MigrationSource):
         try:
             for user in self._iter_all_users():
                 if self._is_ignore_gitlab_user(user.username):
-                    if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS:
+                    if self.gitlab_migration_config.IGNORE_GITLAB_SYSTEM_USERS is True:
                         fg_print.warning(f"Ignored a GitLab specific system user {user.username}."
                                          " If this is incorrect, rerun import permitting"
                                          " system user cloning")

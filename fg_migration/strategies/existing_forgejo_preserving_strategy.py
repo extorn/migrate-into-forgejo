@@ -93,7 +93,10 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
         existing_forgejo_teams_map: dict[str, Team], # map[Team.name.lower() : Team]
         forgejo_team_definition:ForgejoTeamDefinition,
         canonical_team_members: list[CanonicalUser],
-    ) -> AccessLevelAccessMappingStrategy.TeamMatchResult:
+    ) -> AccessLevelAccessMappingStrategy.TeamMatchResult | None:
+        fg_print.error("Running new code")
+
+        # NOTE: this override is called ONLY while materializing teams, NOT adding collaborators
 
         remapped = self.org_remapped_teams_cache.get(forgejo_team_definition.name.lower())
         if remapped is not None:
@@ -102,7 +105,10 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
                 existing_forgejo_teams_map,
                 remapped,
             )
-            return
+            fg_print.debug(f"Using remapped team {remapped.name} in lieu"
+                           f" of {forgejo_team_definition.name}  in "
+                           f"org {organization.get_safe_username()}")
+            return remapped
 
         #
         # First look for an exact-name team.
@@ -114,8 +120,12 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
 
         if matched_team is None:
             # No team exists, can create a team as desired
+            fg_print.debug(f"No existing team {forgejo_team_definition.name} in "
+                           f"org {organization.get_safe_username()}, safe to use")
             return self.TeamMatchNoResult(team_definition=forgejo_team_definition)
 
+        # get a list of all users in the existing team
+        # (don't yet know if we'll be able to use it)
         try:
             existing_usernames = {
                 member.login
@@ -124,9 +134,10 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
                 if member.login is not None
             }
         except IterativeFetchError:
-            return None
+            return None # signals error
 
-        # perform fairly standard lookup of team.
+        # get a list of all users that are expected to be a member of this team
+        # that was found (don't yet know if we'll be able to use it)
         imported_usernames = {
             user.get_safe_username()
             for user in canonical_team_members
@@ -148,8 +159,11 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
 
         #
         # Explicitly configured to use existing teams.
-        #
-        if self.migration_config.USE_EXISTING_TEAMS:
+        # really this overrides the entire point of this strategy!
+        # Might make more sense to instead, use this as a flag to
+        # block or allow using teams with identical set of users to
+        # those being imported. (see block above)
+        if self.migration_config.USE_EXISTING_TEAMS is True:
             fg_print.warning(
                 "Pre-existing team users will be granted "
                 "access to new repositories that are created "
@@ -165,8 +179,8 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
         #
         # Conflict:
         # Keep existing team untouched.
-        # Reuse a migrated team if one already exists.
-        #
+        # Reuse a migrated team (from a previous migration) if one already exists
+        # AND the team members exactly match those to add
         existing_team_names = set(existing_forgejo_teams_map.keys())
         migrated_name = self._generate_safe_team_name(forgejo_team_definition.name,
                                                       existing_names=existing_team_names)
@@ -196,15 +210,18 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
                 return self.TeamMatchExactResult(
                     matched_team=migrated_team
                 )
-
-        #
-        # Force creation of a new team.
-        #
-        updated_definition = deepcopy(forgejo_team_definition)
-        updated_definition.name = migrated_name
-        # update the cache so we get a headstart next time.
-        self.org_remapped_teams_cache[forgejo_team_definition.name.lower()]=updated_definition
-        return self.TeamMatchNoResult(team_definition=updated_definition)
+            #TODO is it okay to & worth it to add this to the cache?
+        else:
+            #
+            # Force creation of a new team.
+            #
+            updated_definition = deepcopy(forgejo_team_definition)
+            updated_definition.name = migrated_name
+            fg_print.info(f"Created migration team {migrated_name} "
+                          f"to avoid clash with {forgejo_team_definition.name}")
+            # update the cache so we get a headstart next time.
+            self.org_remapped_teams_cache[forgejo_team_definition.name.lower()] = updated_definition
+            return self.TeamMatchNoResult(team_definition=updated_definition)
 
     @override
     def _generate_safe_team_name(
