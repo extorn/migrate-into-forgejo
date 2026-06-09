@@ -913,8 +913,8 @@ class ForgejoDestination:
 
             perm = new_definition.permissions.permission
             acceptable_values = get_union_values_as_str(EditTeamOptionPermission)
-            if current_definition.permissions.permission != perm \
-                and not perm.value in acceptable_values:
+            if (current_definition.permissions.permission != perm
+                and not perm.value in acceptable_values):
                 # Trying to change the permission of the team up to Owner!
                 fg_print.error(
                     f"Unsupported permission for editing Forgejo Team {team.name}. "

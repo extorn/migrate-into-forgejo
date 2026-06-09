@@ -404,8 +404,8 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
                                 role_builder=self.migration_dest.forgejo_team_to_role_mapper,
                                 require_exact=True)
 
-                    if remove_self \
-                        and current_team_def.permissions.permission == ForgejoPermission.OWNER:
+                    if (remove_self
+                        and current_team_def.permissions.permission == ForgejoPermission.OWNER):
 
                         fg_print.debug(f"Removing migration user from team {org_team.name}")
                         self.migration_dest.forgejo_remove_user_from_organization_team(

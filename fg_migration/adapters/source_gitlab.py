@@ -229,8 +229,8 @@ class GitLabMigrationSource(MigrationSource):
 
 
     def _is_ignore_gitlab_user(self, username : str) -> bool:
-        if username in self.gitlab_migration_config.IGNORED_GITLAB_SYSTEM_USERS \
-            or self.BOT_REGEX.match(username):
+        if (username in self.gitlab_migration_config.IGNORED_GITLAB_SYSTEM_USERS
+            or self.BOT_REGEX.match(username)):
             return True
 
         fg_print.debug(f"username {username} not in ignored users list "
@@ -451,8 +451,6 @@ class GitLabMigrationSource(MigrationSource):
         """List all those repository accessors that are directly added to this project"""
         repo_accessors_members : list[CanonicalRepoMembership] = []
 
-        # project_members: list[gitlab.v4.objects.ProjectMember] = \
-        #                                           project.members.list(get_all=True)
         project_member : gitlab.v4.objects.ProjectMember
 
         try:
@@ -688,9 +686,9 @@ class GitLabMigrationSource(MigrationSource):
         if allow_downgrade:
             smaller = max((x for x in known_access_levels if x < access_level_int), default=None)
             if not smaller is None:
-                if closest_access_level is None \
-                    or abs(closest_access_level - access_level_int) \
-                        > abs(smaller - access_level_int):
+                if (closest_access_level is None
+                    or abs(closest_access_level - access_level_int)
+                        > abs(smaller - access_level_int)):
                     closest_access_level = smaller
 
         if closest_access_level is None:
