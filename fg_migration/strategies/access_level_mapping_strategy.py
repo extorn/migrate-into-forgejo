@@ -252,9 +252,8 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
             organization=organization,
             existing_forgejo_teams_map=existing_forgejo_org_teams_map,
             forgejo_team_definition=forgejo_team_definition,
-            canonical_team_members=[
-                CanonicalUser(username=u) for u in usernames
-            ],
+            canonical_team_members=[CanonicalUser(username=u) for u in usernames],
+            all_org_memberships=memberships
         )
         is_new_team = False
         if match_result is None:
@@ -523,7 +522,8 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
                         organization : CanonicalOrganization,
                         existing_forgejo_teams_map : dict[str,Team], # map[Team.name.lower() : Team]
                         forgejo_team_definition : ForgejoTeamDefinition,
-                        canonical_team_members : list[CanonicalUser]) -> TeamMatchResult | None:
+                        canonical_team_members : list[CanonicalUser],
+                        all_org_memberships : list[CanonicalOrganizationMembership]) -> TeamMatchResult | None:
 
         matched_team = self._find_matching_team(existing_forgejo_teams_map, forgejo_team_definition)
         if matched_team is None:

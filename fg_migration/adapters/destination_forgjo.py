@@ -808,7 +808,7 @@ class ForgejoDestination:
                 fg_print.error(
                     f"Unsupported permission for creating Forgejo Team {definition.name}. "
                     "Updating Team cancelled.",
-                    f"Failed to create team {definition.name} in Forgejo. "
+                    f"Failed to create team {definition.name} in Forgejo organization {org_name}. "
                     f"Valid Permissions are : {acceptable_values}",
                 )
                 return None
@@ -865,9 +865,9 @@ class ForgejoDestination:
         except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(
-                f"Failed to add member {username} to team {team.name} "
+                f"Failed to remove member {username} of team {team.name} "
                 f"of organization {organization_name}: {detail}",
-                f"Failed to add member {username} to team {team.name} "
+                f"Failed to remove member {username} of team {team.name} "
                 f"for organization {organization_name}",
             )
             return False

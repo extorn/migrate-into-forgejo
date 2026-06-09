@@ -132,7 +132,7 @@ class ForgejoTeamDefinition:
            If require_exact is true, then if none are found, one will be created"""
 
         if role_builder:
-            role,_ = role_builder.get_role_matching_permission(team=team,
+            role,_ = role_builder.get_role_matching_team_permission(team=team,
                                                                require_exact=require_exact)
 
 
@@ -155,7 +155,12 @@ class ForgejoTeamDefinition:
 class ForgejoTeamRoleBuilder:
     """Interface for a ForgejoTeamRole provider"""
     @abstractmethod
-    def get_role_matching_permission(self, team:Team,
+    @override
+    def get_role_matching_permission(self, permission:ForgejoPermission) -> ForgejoRepositoryRole:
+        """Retrieve the Forgejo role permissions applicable for this role"""
+
+    @abstractmethod
+    def get_role_matching_team_permission(self, team:Team,
                                      require_exact:bool=False) -> tuple[ForgejoRepositoryRole,bool]:
         """Retrieve the Forgejo role permissions applicable for this role
            Note; this is used only when retrieving existing teams from the Forgejo server at present
@@ -186,10 +191,25 @@ class ForgejoTeamRoleMapper(ForgejoTeamRoleBuilder):
 
     @override
     def get_role_permissions(self, role:ForgejoRepositoryRole) -> ForgejoRolePermissionDefinition:
-        return self.role_definitions[role]
+        #fg_print.debug(f"Selecting from roles : {set(self.role_definitions.keys())}")
+        match= self.role_definitions.get(role)
+        #fg_print.debug(f"match = {match}")
+        return match
+
+
 
     @override
-    def get_role_matching_permission(self, team:Team,
+    def get_role_matching_permission(self, permission:ForgejoPermission) -> ForgejoRepositoryRole:
+        for role, perm_def in self.role_definitions.items():
+            # Exact match shortcut
+            if perm_def.permission.value == permission:
+                fg_print.debug(f"SUCCESS: Exact match for permission {permission}: {role}")
+                return role
+        raise ValueError(f"Missing role mapping for Forgejo Permission {permission}")
+
+
+    @override
+    def get_role_matching_team_permission(self, team:Team,
                                      require_exact:bool=False) -> tuple[ForgejoRepositoryRole,bool]:
 
         best_role = None
