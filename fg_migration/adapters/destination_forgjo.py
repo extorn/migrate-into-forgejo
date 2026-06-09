@@ -860,8 +860,8 @@ class ForgejoDestination:
 
         try:
             self.fg_api.organization.org_remove_team_member(team.id, username)
-            fg_print.info(f"User {username} added to team {team.name}"
-                          f" of organization {organization_name}!")
+            fg_print.info(f"User {username} removed from team {team.name}"
+                          f" of organization {organization_name}")
         except (ApiError, RequestException) as e:
             detail = self._get_exception_detail(e)
             fg_print.error(

@@ -160,8 +160,8 @@ gitlab_admin_pass = <your-gitlab-password>
 ### Define how the Organizations, Teams and Users are created (see comments in strategies files for examples)
 # Pick one of [access_level,strict_access_level,no_teams,preserve_existing_teams,flatten_source_team_hierarchy]
 #
-# I've tested strategies: access_level, no_teams
-# Still To Test: strict_access_level, preserve_existing_teams, flatten_source_team_hierarchy
+# I've tested strategies: access_level, strict_access_level, no_teams, flatten_source_team_hierarchy
+# Still To Test: preserve_existing_teams,
 #
 # Once listed above as tested, if you encounter a bug, please let me know so it can be
 # fixed for other people (ideally, send me a fix ;-) ).
