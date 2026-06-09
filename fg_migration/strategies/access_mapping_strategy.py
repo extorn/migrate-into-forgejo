@@ -1,7 +1,7 @@
 """Contains the interface AccessMappingStrategy"""
 from abc import ABC, abstractmethod
 
-from pyforgejo import Team
+from pyforgejo import Organization, Team
 
 from fg_migration.adapters.forgeo_types import ForgejoPermission
 from fg_migration.core.canonical_types import CanonicalOrganization, CanonicalRepo
@@ -78,7 +78,7 @@ class AccessMappingStrategy(ABC):
     @abstractmethod
     def import_team_users_from_usernames(
         self,
-        organization: CanonicalOrganization,
+        organization: CanonicalOrganization|Organization,
         usernames: set[str],
         dest_team: Team,
         team_members_cache: dict[int, set[str]], # map[Team.id -> {member.username}]

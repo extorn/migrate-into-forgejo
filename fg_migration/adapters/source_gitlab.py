@@ -418,7 +418,7 @@ class GitLabMigrationSource(MigrationSource):
                     desc_hierarchy = copy(hierarchy)
                     desc_hierarchy.append(HierarchyNode(
                                                 name=descendant_group.path,
-                                                relation="desc"))
+                                                relation=HierarchyNode.RelationEnum.DESCENDANT))
                     descendant_group_id = descendant_group.get_id()
                     descendant_group = self.gitlab_api.groups.get(descendant_group_id)
                     repo_accessors_members += self._process_group(
@@ -430,7 +430,7 @@ class GitLabMigrationSource(MigrationSource):
                     sub_hierarchy = copy(hierarchy)
                     sub_hierarchy.append(HierarchyNode(
                                                 name=sub_hierarchy.path,
-                                                relation="sub"))
+                                                relation=HierarchyNode.RelationEnum.SUB))
                     sub_group_id = sub_group.get_id()
                     sub_group = self.gitlab_api.groups.get(sub_group_id)
                     repo_accessors_members += self._process_group(

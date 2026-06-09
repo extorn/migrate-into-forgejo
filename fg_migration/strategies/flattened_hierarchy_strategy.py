@@ -10,6 +10,7 @@ from fg_migration.core.canonical_types import (
     CanonicalOrganization,
     CanonicalRepo,
     CanonicalRepoMemberships,
+    HierarchyNode,
 )
 from fg_migration.adapters.forgeo_types import (ForgejoPermission, ForgejoTeamDefinition,
                                                 IterativeFetchError)
@@ -197,7 +198,7 @@ Behaviour:
         assert len(hierachical_map) == 0
 
         organization = self.migration_dest.get_forgejo_organization_owner_of_repository(
-                                                                    source_repo=source_repo)
+                                                                    repo=source_repo)
 
         existing_teams_iter = self.migration_dest.iter_forgejo_teams_in_repository(
                                         owner_username=organization.username,
@@ -289,24 +290,24 @@ Behaviour:
 
 
 
-    def _hierarchy_to_team_suffix(self, hierarchy: str | None) -> str:
+    def _hierarchy_to_team_suffix(self, hierarchy: list[HierarchyNode] | None) -> str:
 
         if hierarchy is None:
             return "direct"
 
         parts: list[str] = []
 
-        for token in hierarchy.split("/"):
-            if token == "":
+        for token in hierarchy:
+            if token.name is None or token.name == "":
+                # should never happen
+                fg_print.debug(f"Unexpected value in Hierarchy {hierarchy}")
                 continue
-
-            if token == ":d:":
-                parts.append("desc")
-
-            elif token == ":s:":
-                parts.append("sub")
-
-            else:
-                parts.append(name_clean(token))
-
+            match token.relation:
+                case HierarchyNode.RelationEnum.DESCENDANT:
+                    parts.append("desc")
+                case HierarchyNode.RelationEnum.SUB:
+                    parts.append("sub")
+                case _:
+                    pass
+            parts.append(name_clean(token.name))
         return "-".join(parts)

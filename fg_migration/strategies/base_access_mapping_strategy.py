@@ -2,7 +2,7 @@
    incomplete implementation of AccessMappingStrategy"""
 from typing import override
 
-from pyforgejo import Team
+from pyforgejo import Organization, Team
 
 from fg_migration.adapters.destination_forgjo import ForgejoDestination
 from fg_migration.adapters.forgeo_types import (ForgejoPermission, ForgejoRepositoryRole,
@@ -142,10 +142,17 @@ class BaseAccessMappingStrategy(AccessMappingStrategy):
 
 
     def _safely_add_new_team(self,
-                             organization:CanonicalOrganization,
+                             organization:CanonicalOrganization|Organization,
                              team_definition:ForgejoTeamDefinition) -> Team | None:
+
+        name : str
+        if isinstance(organization,Organization):
+            name = organization.username
+        else:
+            name = organization.get_safe_username()
+
         existing_team = self.migration_dest.forgejo_add_organization_team(
-            org_name=organization.get_safe_username(),
+            org_name=name,
             definition=team_definition,
         )
 
@@ -167,7 +174,7 @@ class BaseAccessMappingStrategy(AccessMappingStrategy):
     @override
     def import_team_users_from_usernames(
         self,
-        organization: CanonicalOrganization,
+        organization: CanonicalOrganization|Organization,
         usernames: set[str],
         dest_team: Team,
         team_members_cache: dict[int, set[str]], # map[Team.id -> {member.username}]
@@ -176,6 +183,13 @@ class BaseAccessMappingStrategy(AccessMappingStrategy):
         """Create an entry in the team for every user with a username in the set
            provided. Uses the team_members_cache to identify existing team users
            from previous operations"""
+
+        org_name : str
+        if isinstance(organization,Organization):
+            org_name = organization.username
+        else:
+            org_name = organization.get_safe_username()
+
         # ---------------------------------------------
         # STEP 1: resolve existing members
         # ---------------------------------------------
@@ -215,7 +229,7 @@ class BaseAccessMappingStrategy(AccessMappingStrategy):
                 continue
 
             added = self.migration_dest.forgejo_add_user_to_organization_team(
-                organization_name=organization.get_safe_username(),
+                organization_name=org_name,
                 username=username,
                 team=dest_team,
             )

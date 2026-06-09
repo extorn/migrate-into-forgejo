@@ -9,7 +9,7 @@
           These types have fields such as username, they are the Source System username.
           the get_safe_username function is to convert that to Forgejo equivalent"""
 from dataclasses import dataclass, field
-from typing import Literal
+from enum import StrEnum
 
 
 
@@ -144,7 +144,12 @@ class HierarchyNode:
     """Define the Source system hierachy of some Canonical Object as
        explained in the class CanonicalRepoMembership"""
     name: str
-    relation: Literal["sub", "desc"]|None = None
+    relation: RelationEnum|None = None
+
+    class RelationEnum(StrEnum):
+        "Type of hierarchy node"
+        SUB = "sub"
+        DESCENDANT = "desc"
 
 
 
