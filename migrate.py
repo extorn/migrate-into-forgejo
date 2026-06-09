@@ -62,10 +62,9 @@ def main() -> int:
     # CONFIG SECTION END
     #######################
 
-    parsed_args = docopt(__doc__)
-    args = {k.replace("--", ""): v for k, v in parsed_args.items()}
+    args = docopt(__doc__)
     # control debug logging
-    if args["debug"]:
+    if args["--debug"]:
         fg_print.IS_DEBUG = True
 
     fg_print.print_color(
@@ -98,10 +97,10 @@ def main() -> int:
                         migration_dest=migration_dest,
                         fg_api_builder=fg_api_builder)
 
-    run_users = args["users"] or args["all"]
-    run_groups = args["groups"] or args["all"]
-    run_projects = args["projects"] or args["all"]
-    run_membership = args["membership"] or args["all"]
+    run_users = args["--users"] or args["--all"]
+    run_groups = args["--groups"] or args["--all"]
+    run_projects = args["--projects"] or args["--all"]
+    run_membership = args["--membership"] or args["--all"]
 
     # IMPORT NOTHING ?
     if not (run_users or run_groups or run_projects or run_membership):
@@ -109,17 +108,25 @@ def main() -> int:
         fg_print.warning("No migration option(s) selected, nothing to do")
         return 0
 
-    # IMPORT System Users
-    if run_users:
-        migrator.import_users(notify=args["notify"])
-    # IMPORT Organizations and Teams (Groups and their member Users)
-    if run_groups:
-         # Note, import_groups uses the gitlab projects object
-         # because they're intrinsically linked really.
-        migrator.import_organizations()
-    # IMPORT Repositories (Projects) AND OR Collaborators (Memberships of Projects)
-    if run_projects or run_membership:
-        migrator.import_repos(import_repo_content=run_projects)
+    try:
+        # IMPORT System Users
+        if run_users:
+            notify=bool(args["--notify"])
+            migrator.import_users(notify=notify)
+        # IMPORT Organizations and Teams (Groups and their member Users)
+        if run_groups:
+            # Note, import_groups uses the gitlab projects object
+            # because they're intrinsically linked really.
+            migrator.import_organizations()
+        # IMPORT Repositories (Projects) AND OR Collaborators (Memberships of Projects)
+        if run_projects or run_membership:
+            migrator.import_repos(import_repo_content=run_projects)
+    except RuntimeError as e:
+        fg_print.error(str(e))
+        return 1
+    finally:
+        #migrator.close()
+        pass
 
     fg_print.info("")
     if fg_print.GLOBAL_ERROR_COUNT == 0:
