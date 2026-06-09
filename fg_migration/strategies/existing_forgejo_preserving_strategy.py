@@ -162,9 +162,9 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
         # reuse it as a special case, allowing the migration user that was
         # temporarily added as owner to be removed later on
         #
-        if forgejo_team_definition.permissions.permission == ForgejoPermission.OWNER \
-            and existing_usernames == {self.migration_username} \
-            and not {self.migration_username} in existing_usernames:
+        if (forgejo_team_definition.permissions.permission == ForgejoPermission.OWNER
+            and existing_usernames == {self.migration_username}
+            and not self.migration_username in imported_usernames):
             fg_print.debug("discovered migration user is sole member "
                           f"of {forgejo_team_definition.name} Team (but is not an "
                           f"Owner in {organization.source_system}). Will reuse team.")
@@ -175,8 +175,8 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
         #
         # Exact membership match -> reuse (IF allow use of existing teams is true).
         #
-        if existing_usernames == imported_usernames \
-            and self.migration_config.USE_EXISTING_TEAMS is True:
+        if (existing_usernames == imported_usernames
+            and self.migration_config.USE_EXISTING_TEAMS is True):
             fg_print.info(
                 "Pre-existing team members exactly match team "
                 "being imported, so reusing.\n"
@@ -193,8 +193,9 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
         # Reuse a migrated team (from a previous migration) if one already exists
         # AND the team members exactly match those to add
         existing_team_names = set(existing_forgejo_teams_map.keys())
-        migrated_name = self._find_latest_migrated_team_name(forgejo_team_definition.name,
-                                                             existing_names=existing_team_names)
+        migrated_name, next_safe_name \
+            = self._get_migrated_team_sequence(forgejo_team_definition.name,
+                                               existing_names=existing_team_names)
         migrated_team = None
         if migrated_name is not None:
             migrated_team = existing_forgejo_teams_map.get(migrated_name.lower())
@@ -225,96 +226,49 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
                     matched_team=migrated_team
                 )
             #TODO is it okay to & worth it to add this to the cache?
-        else:
-            migrated_name = self._generate_safe_team_name(source_name=forgejo_team_definition.name,
-                                                          existing_names=existing_team_names)
-            #
-            # Force creation of a new team.
-            #
-            updated_definition = deepcopy(forgejo_team_definition)
-            if forgejo_team_definition.permissions.permission == ForgejoPermission.OWNER:
-                # We must downgrade this permission to administrator
-                # (cannot create owner grade teams)
-                role = self.migration_dest.forgejo_team_to_role_mapper \
-                                .get_role_matching_permission(ForgejoPermission.ADMIN)
-                admin_perms = self.migration_dest \
-                                .forgejo_team_to_role_mapper.get_role_permissions(role)
-                updated_definition.permissions = admin_perms
-                fg_print.warning(f"Downgrading migration team {migrated_name}"
-                                 " role from Owner to Admin")
-            updated_definition.name = migrated_name
-            fg_print.info(f"Created migration team {migrated_name} "
-                          f"to avoid clash with {forgejo_team_definition.name}")
-            # update the cache so we get a headstart next time.
-            self.org_remapped_teams_cache[forgejo_team_definition.name.lower()] = updated_definition
-            return self.TeamMatchNoResult(team_definition=updated_definition)
+
+        #
+        # Force creation of a new team.
+        #
+        updated_definition = deepcopy(forgejo_team_definition)
+        if forgejo_team_definition.permissions.permission == ForgejoPermission.OWNER:
+            # We must downgrade this permission to administrator
+            # (cannot create owner grade teams)
+            role = self.migration_dest.forgejo_team_to_role_mapper \
+                            .get_role_matching_permission(ForgejoPermission.ADMIN)
+            admin_perms = self.migration_dest \
+                            .forgejo_team_to_role_mapper.get_role_permissions(role)
+            updated_definition.permissions = admin_perms
+            fg_print.warning(f"Downgrading migration team {next_safe_name}"
+                                " role from Owner to Admin")
+        updated_definition.name = next_safe_name
+        fg_print.info(f"Created migration team {next_safe_name} "
+                        f"to avoid clash with {forgejo_team_definition.name}")
+        # update the cache so we get a headstart next time.
+        self.org_remapped_teams_cache[forgejo_team_definition.name.lower()] = updated_definition
+        return self.TeamMatchNoResult(team_definition=updated_definition)
 
 
-    @override
-    def _find_latest_migrated_team_name(
+
+    def _get_migrated_team_sequence(
         self,
         source_name: str,
         existing_names: set[str],
-    ) -> None | str:
+    ) -> tuple[str | None, str]:
 
-        migrated_name = (
-            f"{source_name}{self.TEAM_SUFFIX}"
-        )
-
-        if migrated_name.lower() not in existing_names:
-            return None
-
-        #
-        # Reuse the same migrated name whenever possible.
-        # Only fall back to numbered names if there is an
-        # actual collision.
-        #
-        counter = 1
-        last_candidate = migrated_name
-        while True:
-
-            candidate = (
-                f"{source_name}"
-                f"{self.TEAM_SUFFIX}_{counter}"
-            )
-
-            if candidate.lower() not in existing_names:
-                return last_candidate
-
-            last_candidate = candidate
-            counter += 1
-
-
-
-    @override
-    def _generate_safe_team_name(
-        self,
-        source_name: str,
-        existing_names: set[str],
-    ) -> str:
-
-        migrated_name = (
-            f"{source_name}{self.TEAM_SUFFIX}"
-        )
-
-        if migrated_name.lower() not in existing_names:
-            return migrated_name
-
-        #
-        # Reuse the same migrated name whenever possible.
-        # Only fall back to numbered names if there is an
-        # actual collision.
-        #
-        counter = 1
+        counter = 0
+        last_existing = None
 
         while True:
 
             candidate = (
-                f"{source_name}"
-                f"{self.TEAM_SUFFIX}_{counter}"
+                f"{source_name}{self.TEAM_SUFFIX}"
+                if counter == 0
+                else f"{source_name}{self.TEAM_SUFFIX}_{counter}"
             )
 
             if candidate.lower() not in existing_names:
-                return candidate
+                return last_existing, candidate
 
+            last_existing = candidate
             counter += 1
