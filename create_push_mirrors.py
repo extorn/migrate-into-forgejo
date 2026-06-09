@@ -20,7 +20,6 @@ Options
 
 import configparser
 import os
-import sys
 
 from docopt import docopt
 
@@ -33,14 +32,14 @@ from fg_migration.services.push_mirror_creator import PushMirrorCreator
 SCRIPT_VERSION = "0.2"
 
 
-def main():
+def main() -> int:
     """Main function"""
     #######################
     # CONFIG SECTION START
     #######################
     if not os.path.exists(".migrate.ini"):
         fg_print.error("Please create .migrate.ini as explained in the README")
-        sys.exit(1)
+        return 1
 
 
     config = configparser.RawConfigParser()
@@ -52,11 +51,9 @@ def main():
     # CONFIG SECTION END
     #######################
 
-    parsed_args = docopt(__doc__)
-    args = {k.replace("--", ""): v for k, v in parsed_args.items()}
+    args = docopt(__doc__)
     # control debug logging
-    if args["debug"]:
-        fg_print.IS_DEBUG = True
+    fg_print.IS_DEBUG = bool(args["--debug"])
 
     fg_print.print_color(
         fg_print.Bcolors.HEADER,
@@ -74,7 +71,7 @@ def main():
     fg_conn_success = fg_api_builder.test_forgejo_connection(fg_api=fg_api)
 
     if not (gl_conn_success and fg_conn_success):
-        sys.exit(1)
+        return 1
 
 
     #
@@ -84,31 +81,36 @@ def main():
     pmc = PushMirrorCreator(fg_api=fg_api, gl_api=gl_api, forgejo_config=forgejo_config,
                             gitlab_config=gitlab_config)
 
-    projects = pmc.load_gitlab_projects()
+    try:
+        projects = pmc.load_gitlab_projects()
 
-    if args["create"]:
+        if args["--create"]:
 
-        fg_print.info("Creating mirrors")
+            fg_print.info("Creating mirrors")
 
-        if args["to-forgejo"] or args["all"]:
-            pmc.to_forgejo(projects)
+            if args["--to-forgejo"] or args["--all"]:
+                pmc.to_forgejo(projects)
 
-        if args["to-gitlab"] or args["all"]:
-            pmc.to_gitlab(projects)
+            if args["--to-gitlab"] or args["--all"]:
+                pmc.to_gitlab(projects)
 
-    elif args["delete"]:
+        elif args["--delete"]:
 
-        fg_print.info("Deleting mirrors")
+            fg_print.info("Deleting mirrors")
 
-        if args["to-forgejo"] or args["all"]:
-            pmc.delete_to_forgejo(projects)
+            if args["--to-forgejo"] or args["--all"]:
+                pmc.delete_to_forgejo(projects)
 
-        if args["to-gitlab"] or args["all"]:
-            pmc.delete_to_gitlab(projects)
+            if args["--to-gitlab"] or args["--all"]:
+                pmc.delete_to_gitlab(projects)
 
-    else:
-        raise AssertionError("unreachable")
-
+        else:
+            raise RuntimeError("unreachable")
+    except RuntimeError as e:
+        fg_print.error(str(e))
+        return 1
+    finally:
+        pmc.close()
     #
     # Summary
     #
@@ -128,7 +130,8 @@ def main():
         fg_print.info("Failed elements:")
 
         print(*fg_print.GLOBAL_ERROR_LIST, sep="\n")
-        sys.exit(1)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

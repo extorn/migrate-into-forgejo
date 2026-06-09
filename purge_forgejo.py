@@ -21,7 +21,6 @@ Options:
 """
 import os
 import configparser
-import sys
 from docopt import docopt
 from click import confirm
 from fg_migration.utils import fg_print

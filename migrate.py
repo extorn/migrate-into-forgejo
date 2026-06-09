@@ -22,7 +22,6 @@ Options
 """
 import os
 import configparser
-import sys
 
 from docopt import docopt
 
@@ -121,12 +120,11 @@ def main() -> int:
         # IMPORT Repositories (Projects) AND OR Collaborators (Memberships of Projects)
         if run_projects or run_membership:
             migrator.import_repos(import_repo_content=run_projects)
-    except RuntimeError as e:
+    except Exception as e:
         fg_print.error(str(e))
         return 1
     finally:
-        #migrator.close()
-        pass
+        migrator.close()
 
     fg_print.info("")
     if fg_print.GLOBAL_ERROR_COUNT == 0:

@@ -99,6 +99,10 @@ class Migrator:
                 raise ValueError()
 
 
+    def close(self) -> None:
+        """Close the API interface (permanent)"""
+
+
 
     #TODO reenable this code and update it to work (it isn't strictly required,
     #     but someone may find it useful to customise what happens normally in the auto-migrate)

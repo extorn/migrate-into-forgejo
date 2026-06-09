@@ -61,7 +61,7 @@ class PushMirrorCreator:
 
     def close(self) -> None:
         """Close the API interface (permanent)"""
-        self.forgejo_api.close()
+        #self.forgejo_api.close()
 
 
 
