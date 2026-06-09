@@ -90,6 +90,8 @@ You need to create a configuration file called `.migrate.ini` and store it in th
 ###    e.g.
 ###    input -> my_setting=some_value # A comment
 ###    read as -> my_setting="some_value # A comment"
+### 5. Where there is a default, I recommend copy and pasting that directly below, uncommenting it, then
+###    altering it to suit so you always know at a glance what the default was
 
 
 
@@ -160,11 +162,9 @@ gitlab_admin_pass = <your-gitlab-password>
 ### Define how the Organizations, Teams and Users are created (see comments in strategies files for examples)
 # Pick one of [access_level,strict_access_level,no_teams,preserve_existing_teams,flatten_source_team_hierarchy]
 #
-# I've tested strategies: access_level, strict_access_level, no_teams, flatten_source_team_hierarchy
-# Still To Test: preserve_existing_teams,
+# Warning, strategy not yet working as described : preserve_existing_teams,
 #
-# Once listed above as tested, if you encounter a bug, please let me know so it can be
-# fixed for other people (ideally, send me a fix ;-) ).
+# If you encounter a bug in a strategy, please let me know so it can be fixed for other people (ideally, send me a fix ;-) ).
 #
 #access_mapping_strategy=access_level
 
