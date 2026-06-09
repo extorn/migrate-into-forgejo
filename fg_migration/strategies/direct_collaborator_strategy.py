@@ -113,36 +113,16 @@ class DirectCollaboratorOnlyStrategy(BaseAccessMappingStrategy):
         # STEP 1: Remove the current user from the owner team if that wouldn't leave it empty
         # ------------------------------------------------------------------------------------------
 
-        # Get list of teams in the repository essentially.
-        iter_existing_repo_teams = self.migration_dest.iter_forgejo_teams_in_repository(
-                                            owner_username=source_repo.get_safe_owner_name(),
-                                            repo_name=source_repo.get_safe_username(),
-                                        )
-
         migration_username = self.migration_dest.get_active_user().login
         remove_self = self.should_remove_migration_user_from_owners_team(
                                         migration_source=migration_source,
                                         migration_username=migration_username,
                                         repo_accessors=repo_accessors)
 
-        # Find the owner team for this repository
-        owner_team : Team
-        try:
-            for repo_team in iter_existing_repo_teams:
-                current_team_def = ForgejoTeamDefinition.from_team(
-                            team=repo_team,
-                            role_builder=self.migration_dest.forgejo_team_to_role_mapper,
-                            require_exact=True)
-
-                if current_team_def.permissions.permission == ForgejoPermission.OWNER:
-                    owner_team = repo_team
-                    break
-        except IterativeFetchError:
-                fg_print.error(
-                    f"Failed to load organization teams for "
-                    f"{source_repo.get_safe_owner_name()}"
-                )
-                return
+        owner_team = self.find_owner_team_for_repo(source_repo=source_repo)
+        if owner_team is None:
+            fg_print.error("Unable to safely import accessors, skipping")
+            return
 
         fg_print.info(f"Importing direct collaborators for {source_repo.name}")
 

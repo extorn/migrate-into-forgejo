@@ -8,7 +8,7 @@ from fg_migration.adapters.destination_forgjo import ForgejoDestination
 from fg_migration.adapters.forgeo_types import (ForgejoPermission, ForgejoRepositoryRole,
                                                 ForgejoRolePermissionDefinition,
                                                 ForgejoTeamDefinition, IterativeFetchError)
-from fg_migration.core.canonical_types import CanonicalOrganization, CanonicalRepoMemberships
+from fg_migration.core.canonical_types import CanonicalOrganization, CanonicalRepo, CanonicalRepoMemberships
 from fg_migration.core.config_types import MigrationConfig
 from fg_migration.core.migration_source_type import MigrationSource
 from fg_migration.strategies.access_mapping_strategy import AccessMappingStrategy
@@ -240,3 +240,31 @@ class BaseAccessMappingStrategy(AccessMappingStrategy):
                 fg_print.error(
                     f"Failed to add {username} to team {dest_team.name}"
                 )
+
+    def find_owner_team_for_repo(self, source_repo:CanonicalRepo) -> Team|None:
+        """Find the owner team for this repository"""
+
+        # Get list of teams in the repository essentially.
+        iter_existing_repo_teams = self.migration_dest.iter_forgejo_teams_in_repository(
+                                            owner_username=source_repo.get_safe_owner_name(),
+                                            repo_name=source_repo.get_safe_username(),
+                                        )
+
+        owner_team : Team
+        try:
+            for repo_team in iter_existing_repo_teams:
+                current_team_def = ForgejoTeamDefinition.from_team(
+                            team=repo_team,
+                            role_builder=self.migration_dest.forgejo_team_to_role_mapper,
+                            require_exact=True)
+
+                if current_team_def.permissions.permission == ForgejoPermission.OWNER:
+                    owner_team = repo_team
+                    break
+        except IterativeFetchError:
+            fg_print.error(
+                f"Failed to load organization teams for "
+                f"{source_repo.get_safe_owner_name()}"
+            )
+            return None
+        return owner_team
