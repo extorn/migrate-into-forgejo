@@ -248,15 +248,15 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
 
         usernames = {m.get_safe_username() for m in memberships if m.username}
 
-        match_result = self._find_existing_org_team_for_new_users_matching(
-            organization=organization,
-            existing_forgejo_teams_map=existing_forgejo_org_teams_map,
-            forgejo_team_definition=forgejo_team_definition,
-            canonical_team_members=[CanonicalUser(username=u) for u in usernames],
-            all_org_memberships=memberships
-        )
-        is_new_team = False
-        if match_result is None:
+        try:
+            match_result = self._find_existing_org_team_for_new_users_matching(
+                organization=organization,
+                existing_forgejo_teams_map=existing_forgejo_org_teams_map,
+                forgejo_team_definition=forgejo_team_definition,
+                canonical_team_members=[CanonicalUser(username=u) for u in usernames]
+            )
+            is_new_team = False
+        except IterativeFetchError:
             # Something went wrong trying to find existing org team
             fg_print.error("skipping import of access level due to match failure...")
             return None
@@ -522,8 +522,14 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
                         organization : CanonicalOrganization,
                         existing_forgejo_teams_map : dict[str,Team], # map[Team.name.lower() : Team]
                         forgejo_team_definition : ForgejoTeamDefinition,
-                        canonical_team_members : list[CanonicalUser],
-                        all_org_memberships : list[CanonicalOrganizationMembership]) -> TeamMatchResult | None:
+                        canonical_team_members : list[CanonicalUser]) -> TeamMatchResult:
+        """
+        Raises
+        ------
+        IterativeFetchError
+            If there are problems retrieving team members or other items in
+            API calls during the check
+        """
 
         matched_team = self._find_matching_team(existing_forgejo_teams_map, forgejo_team_definition)
         if matched_team is None:
@@ -533,9 +539,9 @@ class AccessLevelAccessMappingStrategy(BaseAccessMappingStrategy):
             existing_usernames = {member.login
                         for member in self.migration_dest.iter_forgejo_team_members(matched_team)
                         if member.login is not None}
-        except IterativeFetchError:
-            # bubble the problem
-            return None
+        except IterativeFetchError as e:
+            fg_print.debug(f"Error loading usernames: {e}")
+            raise
 
 
         imported_usernames = { user.get_safe_username()

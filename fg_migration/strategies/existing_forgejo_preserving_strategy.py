@@ -1,13 +1,17 @@
 """contains the ExistingForgejoPreservingStrategy class"""
 from copy import deepcopy
-import os
 from typing import override
 
 from pyforgejo import Team
 
-from fg_migration.adapters.forgeo_types import (ForgejoPermission, ForgejoRepositoryRole, ForgejoTeamDefinition,
+from fg_migration.adapters.destination_forgjo import ForgejoDestination
+from fg_migration.adapters.forgeo_types import (ForgejoPermission,
+                                                ForgejoTeamDefinition,
                                                 IterativeFetchError)
-from fg_migration.core.canonical_types import CanonicalOrganization, CanonicalOrganizationMembership, CanonicalUser
+from fg_migration.core.canonical_types import (CanonicalOrganization,
+                                               CanonicalOrganizationMembership,
+                                               CanonicalUser)
+from fg_migration.core.config_types import MigrationConfig
 from fg_migration.core.migration_source_type import MigrationSource
 from fg_migration.strategies.access_level_mapping_strategy import AccessLevelAccessMappingStrategy
 from fg_migration.utils import fg_print
@@ -78,21 +82,25 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
 
     TEAM_SUFFIX = "_migrated"
 
-     # old_name.lower()) to new definition
-    org_remapped_teams_cache : dict[str,ForgejoTeamDefinition] = {}
-    migration_username : None
-    migration_source : MigrationSource
+    @override
+    def __init__(self, migration_dest:ForgejoDestination, migration_config:MigrationConfig):
+        super().__init__(migration_dest=migration_dest, migration_config=migration_config)
+        self.org_remapped_team_names : dict[str,str] = {} # name.lower() : name.lower()
+        self.migration_username : str | None = None
+        self._team_members_cache: dict[int, set[str]] = {}  # team.id set[member.username]
 
     @override
     def import_teams(self, migration_source: MigrationSource, organization: CanonicalOrganization):
-        assert len(self.org_remapped_teams_cache) == 0 # check not inadvertently changing this
 
-        # cache the migration_username and source
+        # cache the migration_username to avoid an API lookup for every team
         self.migration_username = self.migration_dest.get_active_user().login
-        self.migration_source = migration_source
-
-        super().import_teams(migration_source=migration_source, organization=organization)
-        self.org_remapped_teams_cache.clear() # ensure it is ready for the next organization
+        self.org_remapped_team_names.clear()
+        self._team_members_cache.clear()
+        try:
+            super().import_teams(migration_source=migration_source, organization=organization)
+        finally:
+            self.org_remapped_team_names.clear() # ensure it is ready for the next organization
+            self._team_members_cache.clear()
 
 
 
@@ -102,20 +110,24 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
         organization: CanonicalOrganization,
         existing_forgejo_teams_map: dict[str, Team], # map[Team.name.lower() : Team]
         forgejo_team_definition:ForgejoTeamDefinition,
-        canonical_team_members: list[CanonicalUser],
-        all_org_memberships : list[CanonicalOrganizationMembership]
+        canonical_team_members: list[CanonicalUser]
     ) -> AccessLevelAccessMappingStrategy.TeamMatchResult | None:
+        """
+        Raises
+        ------
+        IterativeFetchError
+            If there are problems retrieving team members or other items in
+            API calls during the check
+        """
 
         # NOTE: this override is called ONLY while materializing teams, NOT adding collaborators
 
-        remapped = self.org_remapped_teams_cache.get(forgejo_team_definition.name.lower())
-        if remapped is not None:
+        remapped_team_name_to_name = self.org_remapped_team_names.get(
+                                                        forgejo_team_definition.name.lower())
+        if remapped_team_name_to_name is not None:
             # skip the rest of the logic in this function (we know there is a match).
-            matched_team = self._find_matching_team(
-                existing_forgejo_teams_map,
-                remapped,
-            )
-            fg_print.debug(f"Using remapped team {remapped.name} in lieu"
+            matched_team = existing_forgejo_teams_map.get(remapped_team_name_to_name.lower())
+            fg_print.debug(f"Using remapped team {remapped_team_name_to_name} in lieu"
                            f" of {forgejo_team_definition.name}  in "
                            f"org {organization.get_safe_username()}")
             if matched_team is not None:
@@ -138,14 +150,10 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
         # get a list of all users in the existing team
         # (don't yet know if we'll be able to use it)
         try:
-            existing_usernames = {
-                member.login
-                for member in self.migration_dest
-                    .iter_forgejo_team_members(matched_team)
-                if member.login is not None
-            }
-        except IterativeFetchError:
-            return None # signals error
+            existing_usernames = self._load_usernames(matched_team)
+        except IterativeFetchError as e:
+            fg_print.debug(f"error retrieving existing usernames {e}")
+            raise
 
         # get a list of all users that are expected to be a member of this team
         # that was found (don't yet know if we'll be able to use it)
@@ -164,7 +172,7 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
         #
         if (forgejo_team_definition.permissions.permission == ForgejoPermission.OWNER
             and existing_usernames == {self.migration_username}
-            and not self.migration_username in imported_usernames):
+            and self.migration_username not in imported_usernames):
             fg_print.debug("discovered migration user is sole member "
                           f"of {forgejo_team_definition.name} Team (but is not an "
                           f"Owner in {organization.source_system}). Will reuse team.")
@@ -193,28 +201,24 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
         # Reuse a migrated team (from a previous migration) if one already exists
         # AND the team members exactly match those to add
         existing_team_names = set(existing_forgejo_teams_map.keys())
-        migrated_name, next_safe_name \
+        latest_existing_team_name_variant, next_available_team_name_variant \
             = self._get_migrated_team_sequence(forgejo_team_definition.name,
                                                existing_names=existing_team_names)
         migrated_team = None
-        if migrated_name is not None:
-            migrated_team = existing_forgejo_teams_map.get(migrated_name.lower())
+        if latest_existing_team_name_variant != forgejo_team_definition.name:
+            # direct previous team name has the migration suffix
+            migrated_team = existing_forgejo_teams_map.get(latest_existing_team_name_variant.lower())
 
         if migrated_team is not None:
             fg_print.debug("Existing previously migrated team found:"
                            f" {migrated_team.name} id:{migrated_team.id}")
 
             try:
-                migrated_usernames = {
-                    member.login
-                    for member in self.migration_dest
-                        .iter_forgejo_team_members(
-                            migrated_team
-                        )
-                    if member.login is not None
-                }
-            except IterativeFetchError:
-                return None
+                migrated_usernames = self._load_usernames(migrated_team)
+            except IterativeFetchError as e:
+                fg_print.debug(f"Error retrieving migrated usernames: {e}")
+                raise
+
 
             if migrated_usernames == imported_usernames:
                 fg_print.info(
@@ -225,7 +229,6 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
                 return self.TeamMatchExactResult(
                     matched_team=migrated_team
                 )
-            #TODO is it okay to & worth it to add this to the cache?
 
         #
         # Force creation of a new team.
@@ -239,14 +242,41 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
             admin_perms = self.migration_dest \
                             .forgejo_team_to_role_mapper.get_role_permissions(role)
             updated_definition.permissions = admin_perms
-            fg_print.warning(f"Downgrading migration team {next_safe_name}"
+            fg_print.warning(f"Downgrading migration team {next_available_team_name_variant}"
                                 " role from Owner to Admin")
-        updated_definition.name = next_safe_name
-        fg_print.info(f"Created migration team {next_safe_name} "
+        updated_definition.name = next_available_team_name_variant
+        fg_print.info(f"Created migration team {next_available_team_name_variant} "
                         f"to avoid clash with {forgejo_team_definition.name}")
-        # update the cache so we get a headstart next time.
-        self.org_remapped_teams_cache[forgejo_team_definition.name.lower()] = updated_definition
+        # update the cache so we get a headstart next time(n.b. inserting in lower case).
+        self.org_remapped_team_names[
+            forgejo_team_definition.name.lower()] = updated_definition.name.lower()
         return self.TeamMatchNoResult(team_definition=updated_definition)
+
+
+
+    def _load_usernames(self, team:Team) -> set[str]:
+        """
+        Raises
+        ------
+        IterativeFetchError
+            If there are problems retrieving team members
+        """
+        usernames = self._team_members_cache.get(team.id)
+        if usernames is None:
+            try:
+                usernames = {
+                    member.login
+                    for member in self.migration_dest
+                        .iter_forgejo_team_members(
+                            team
+                        )
+                    if member.login is not None
+                }
+                self._team_members_cache[team.id] = usernames
+            except IterativeFetchError as e:
+                fg_print.debug(f"API error while loading usernames for team {team.name}: {e}")
+                raise
+        return usernames
 
 
 
@@ -254,10 +284,16 @@ class ExistingForgejoPreservingStrategy(AccessLevelAccessMappingStrategy):
         self,
         source_name: str,
         existing_names: set[str],
-    ) -> tuple[str | None, str]:
+    ) -> tuple[str, str]:
+        """returns:
+        (
+            latest existing team in the migration naming sequence,
+            first available team name in the migration naming sequence
+        )
+        """
 
         counter = 0
-        last_existing = None
+        last_existing = source_name
 
         while True:
 
