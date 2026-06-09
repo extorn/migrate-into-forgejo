@@ -65,6 +65,7 @@ class Migrator:
             case _:
                 raise ValueError(f"Unexpected strategy_id: {strategy_id}")
         self.access_mapping_strategy = strategy
+        fg_print.info(f"Using teams and users mapping strategy : {strategy.__class__.__name__}")
         self.run_logic_checks()
 
 
