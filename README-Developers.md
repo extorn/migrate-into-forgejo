@@ -15,6 +15,7 @@
 | canonical\_types.py | A set of classes which act as a bridge between the source systems and Forgejo types. | The key idea is that it is a lot easier mentally to see what is going on if you know a type is canonical it has come from the source system, if it is e.g. a Team, or User, it has come from Forgejo. These classes could equally have been called Import\[ed\]\<XYZ> or similar. |
 | config\_types.py | Immutable Data classes that configuration files are loaded into, these types are passed around the rest of the code | These are loaded with data from the .migrate.ini file sections |
 | migration\_source\_type.py | An abstract class that defines the interface for ANY source system to be imported into Forgejo | There is no support for paging API calls at present, that's the next consideration now the migration code essentially works, though of less urgency as most users are presumed to be either own small repositories for personal use or have funds to write such a script for themselves for their custom commercial use. |
+| migration\_source.py | Builder functions for the MigrationSource classes | One builder per MigrationSource implementation |
 | **SERVICES** |   |   |
 | fg\_purger.py | A class that contains all code used to purge Forgejo | This code was extracted from the orginal forked code in purge\_forgejo.py. It has been updated to use the pyforge API, but not been tested |
 | migrator.py | The actual migration engine itself | Extracts canonical types from the migration source provided and loads them into the destination provided - currently only Forgejo is supported as a destination with no effort made to make this configurable, though it wouldn't be too complicated now, the interface would be much broader than the MigrationSource ones |
@@ -47,11 +48,10 @@
 
 ### Steps
 
-1.  Create a new file ./fg\_migration/\<my\_source\_system\_name>.py by copying and pasting migration\_source\_type.py
-2.  Rename the class header inside to class \<my\_source\_system\_name>MigrationSource(MigrationSource):
-3.  Implement each function as required. _Look to the gitlab.py as an example implementation_
-4.  Change the following code block in migrate.py to instantiate an instance of your new MigrationSource implementation
-
-```python
-migrate.py migration_source : MigrationSource = ...
-```
+1.  Create a new file `./fg_migration/<my_source_system_name>.py` by copying and pasting `migration_source_type.py`
+2.  Rename the class header inside to `class <my_source_system_name>MigrationSource(MigrationSource):`
+3.  Implement each function as required. _Look to the_ `_gitlab.py_` _as an example implementation_
+4.  In `migration_source.py`
+    1.  Add a builder function for your new Source System
+    2.  Update the enum class to include a unique config value for your SourceSystem `class SourceType`
+    3.  Update the `SOURCE_BUILDERS` map, adding an entry from your enum entry to the new builder function you wrote

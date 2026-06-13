@@ -1,12 +1,12 @@
 # Automated Migration to Forgejo for Users,Organizations,Teams,Repositories,...
 
-\*\*Currently only gitlab support is implemented, but implementing support for others in a modular way is possible.
+*   Currently only GitLab is implemented as a data source, but implementing support for others in a modular way is possible and relatively trivial, even for a non python developer such as myself. See [README-Developers.md](./README-Developers.md)
 
 ## Preamble
 
-This script uses the GitLab API and a combination of [pyforgejo](https://codeberg.org/harabat/pyforgejo) and python `requests` (where necessary) to migrate all data from GitLab to Forgejo.
+This script uses Source System APIs and a combination of [pyforgejo](https://codeberg.org/harabat/pyforgejo) and python `requests` (where necessary) to migrate all data from that system to Forgejo.
 
-This script currently supports GitLab migration of:
+This script currently supports GitLab, including migration of:
 
 Repositories
 
@@ -48,8 +48,8 @@ python3 -m pip install -r requirements.txt
 and you call the scripts using `--help`:
 
 *   `./migrate.py --help`
-*   `./purge_forgejo.py --help`
-*   `./create_push_mirrors.py --help`  \***NOTE**: **I have not used this script, it might work, it might not.**
+*   `./purge_forgejo.py --help` **Note**: Use this to wipe certain types of, or all, data from the .migrate.ini defined Forgejo instance
+*   `./create_push_mirrors.py --help`  **NOTE**: **I have not used this script, it might work, it might not. It ONLY supports GitLab**
 
 ## Configuration Files
 

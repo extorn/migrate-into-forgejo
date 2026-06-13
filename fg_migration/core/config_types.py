@@ -7,6 +7,7 @@ import datetime
 @dataclass(frozen=True)
 class MigrationConfig:
     """The configuration options specific to migration from system x to Forgejo"""
+    MIGRATION_SOURCE:str
     MIGRATION_DATE_TIME:str
     USE_EXISTING_TEAMS:bool
     ADD_EMPTY_TEAMS_TO_ORGANIZATIONS:bool
@@ -21,6 +22,7 @@ class MigrationConfig:
     def from_config(cls, config:configparser.RawConfigParser, section:str="migrate"):
         """Create the frozen instance from config file"""
         return cls(
+            MIGRATION_SOURCE = config.get(section,"source").lower(),
             MIGRATION_DATE_TIME = f'{datetime.datetime.now():%Y%m%d_%H:%M:%S}',
             USE_EXISTING_TEAMS = config.getboolean(section, option="use_existing_teams",
                                                    fallback=False),

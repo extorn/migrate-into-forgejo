@@ -8,7 +8,7 @@ Usage: migrate.py [--debug] [--users] [--groups] [--projects] [--membership] [--
        migrate.py --help
 
 Migration script to import users, groups, projects, and group/user membership
-of projects from GitLab to Forgejo.
+of projects from any Source System to Forgejo.
 
 Options
   -h, --help    Show this screen
@@ -27,11 +27,8 @@ from docopt import docopt
 
 
 from fg_migration.adapters.forgeo_types import ForgejoApiBuilder
-from fg_migration.adapters.gitlab_types import GitLabApiBuilder
-from fg_migration.adapters.source_gitlab import GitLabMigrationSource
-from fg_migration.core.migration_source_type import MigrationSource
-from fg_migration.core.config_types import (ForgejoConfig, GitLabConfig,
-                                            GitLabMigrationConfig, MigrationConfig)
+from fg_migration.core.migration_source import SourceFactory
+from fg_migration.core.config_types import (ForgejoConfig, MigrationConfig)
 from fg_migration.adapters.destination_forgjo import ForgejoDestination
 from fg_migration.services.migrator import Migrator
 
@@ -54,8 +51,6 @@ def main() -> int:
     config.read(".migrate.ini")
     migration_config = MigrationConfig.from_config(config=config)
     forgejo_config = ForgejoConfig.from_config(config=config)
-    gitlab_config = GitLabConfig.from_config(config=config)
-    migration_config_gitlab = GitLabMigrationConfig.from_config(config=config)
 
     #######################
     # CONFIG SECTION END
@@ -71,22 +66,21 @@ def main() -> int:
     )
     fg_print.info(f"Version: {SCRIPT_VERSION}\n")
 
-    #TODO switch migration_source based on config property
-    gl_api_builder = GitLabApiBuilder(gitlab_config)
-    gl_api = gl_api_builder.build_gitlab_api_client()
-    gl_conn_success = gl_api_builder.test_gitlab_connection(gl_api)
 
-    migration_source : MigrationSource = GitLabMigrationSource(
-                                                gitlab_api=gl_api,
-                                                gitlab_config=gitlab_config,
-                                                gitlab_migration_config=migration_config_gitlab)
-
+    try:
+        migration_source = SourceFactory.build_migration_source(config=config,
+                                                                migration_config=migration_config)
+    except ValueError as e:
+        fg_print.error(f"{e}")
+        return 1
+    except ConnectionError:
+        return 2
 
     fg_api_builder = ForgejoApiBuilder(forgejo_config=forgejo_config)
     fg_api = fg_api_builder.build_forgejo_api_client()
     fg_conn_success= fg_api_builder.test_forgejo_connection(fg_api=fg_api)
 
-    if not (gl_conn_success and fg_conn_success):
+    if not fg_conn_success:
         return 1
 
     migration_dest : ForgejoDestination = ForgejoDestination(fg_api=fg_api,
