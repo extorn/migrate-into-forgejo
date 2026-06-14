@@ -21,12 +21,13 @@
 | migrator.py | The actual migration engine itself | Extracts canonical types from the migration source provided and loads them into the destination provided - currently only Forgejo is supported as a destination with no effort made to make this configurable, though it wouldn't be too complicated now, the interface would be much broader than the MigrationSource ones |
 | push\_mirror\_creator.py | A class that contains all code used manage push mirrors to/from Forgejo | This code was extracted from the orginal forked code in purge\_forgejo.py. It has been updated to use the pyforge API, but not been tested |
 | **STRATEGIES** |   |   |
-| base\_access\_mapping\_strategy.py | abstract implementation | This adds a few helpful implementations of functions that are commonly needed |
 | access\_level\_mapping\_strategy.py |   | see class comment |
-| strict\_access\_level\_mapping\_strategy.py |   | see class comment |
 | access\_mapping\_strategy.py | Interface class | implemented to define how users andd collaborations are mapped into the repositories, organizations, etc |
+| base\_access\_mapping\_strategy.py | abstract implementation | This adds a few helpful implementations of functions that are commonly needed |
 | direct\_collaborator\_strategy.py |   | see class comment |
 | existing\_forgejo\_preserving\_strategy.py |   | see class comment |
+| flattened\_hierarchy\_strategy.py |   | see class comment |
+| strict\_access\_level\_mapping\_strategy.py |   | see class comment |
 | **UTILS** |   |   |
 | fg\_print.py | A wrapper around logging inherited from the original forked code | I'm not clear on the benefits of this, but not being a native python developer, I've left it as is for now |
 | utils.py | A place for a series of functions used in various places | A temporary dumping ground, but the aim is to keep this as small as possible |
