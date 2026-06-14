@@ -69,7 +69,9 @@ your requirements.
 ### **.migrate.ini file**
 
 You need to create a configuration file called `.migrate.ini` and store it in the same directory of the script.
-:bulb: `.migrate.ini` is listed in `.gitignore`.
+
+:bulb:
+`.migrate.ini` is listed in `.gitignore`.
 
 ```
 ###
