@@ -1,0 +1,12 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index 4eb0a69..f362be5 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -1,6 +1,5 @@
+ [build-system]
+-requires = ["poetry-core>=2.0.0"]
+-build-backend = "poetry.core.masonry.api"
++requires = ["uv>=0.10"]
+ 
+ [project]
+ name = "pyforgejo"
