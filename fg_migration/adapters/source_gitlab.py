@@ -314,8 +314,8 @@ class GitLabMigrationSource(MigrationSource):
                 repo = CanonicalRepo(source_system=self.source_system,
                                      source_id=project.get_id(),
                                      is_individual=is_individual,
-                                     username=project.path,
-                                     name=project.name,
+                                     username=project.path, # repo name found in the url
+                                     name=project.name, # User friendly name
                                      owner_name=owner_name,
                                      clone_url=clone_url,
                                      is_private=is_private,
