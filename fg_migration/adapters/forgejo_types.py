@@ -43,6 +43,7 @@ class ForgejoApiBuilder:
             api_token = api_key
         return PyforgejoApi(base_url=self.config.FORGEJO_API_URL,
                             api_key=api_token,
+                            timeout=99999, # 7 days for the sake of it
                             httpx_client = self._build_httpx_client())
 
 
