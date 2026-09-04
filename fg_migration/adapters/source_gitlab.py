@@ -140,7 +140,7 @@ class GitLabMigrationSource(MigrationSource):
                                    ) -> Iterator[gitlab.v4.objects.GroupMember]:
         paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=self.gitlab_config.API_MAX_PAGE_SIZE, items_type="Groups")
         return paginator.iterate(fetch_page_from_api=
-            lambda gl_api, page, limit: group.members.list(
+            lambda gl_api, page, limit: group.members_all.list(
                 page=page,
                 per_page=limit,
             )
@@ -154,7 +154,7 @@ class GitLabMigrationSource(MigrationSource):
         paginator = GitLabApiPaginator(gl_api=self.gitlab_api,
                                        page_size=self.gitlab_config.API_MAX_PAGE_SIZE, items_type="Project Members")
         return paginator.iterate(fetch_page_from_api=
-            lambda gl_api, page, limit: project.members.list(
+            lambda gl_api, page, limit: project.members_all.list(
                 page=page,
                 per_page=limit,
             )
