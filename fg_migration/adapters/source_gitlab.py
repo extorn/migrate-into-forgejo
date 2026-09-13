@@ -303,7 +303,7 @@ class GitLabMigrationSource(MigrationSource):
                     fg_print.error(f"Could not extract repository name for project {project.name}"
                                    f" with path {project.path_with_namespace}, skipping import")
                     continue
-                clone_url = self._build_gitlab_repo_url(owner_name, repo_name)
+                clone_url = self._build_gitlab_repo_url(project)
 
                 is_private = (project.visibility == "private" or project.visibility == "internal")
                 auth_password=self.gitlab_config.GITLAB_ADMIN_PASS
@@ -349,12 +349,11 @@ class GitLabMigrationSource(MigrationSource):
 
 
 
-    def _build_gitlab_repo_url(self, owner: str, repo: str) -> str:
+    def _build_gitlab_repo_url(self, project:gitlab.v4.objects.Project) -> str:
         if self.gitlab_config.GITLAB_SYNC_CONNECTION_TYPE == "ssh":
-            return f"git@{self.gitlab_config.GITLAB_URL.replace('https://', '') \
-                          .replace('http://', '')}:{owner}/{repo}.git"
+            return project.ssh_url_to_repo
 
-        return f"{self.gitlab_config.GITLAB_URL}/{owner}/{repo}.git"
+        return project.http_url_to_repo
 
 
 
