@@ -11,7 +11,7 @@ import yaml
 
 from fg_migration.adapters.gitlab_types import GitLabApiPaginator, IterativeFetchError
 from fg_migration.utils import fg_print
-from fg_migration.adapters.destination_forgjo import ForgejoRepositoryRole
+from fg_migration.adapters.destination_forgejo import ForgejoRepositoryRole
 from fg_migration.core.migration_source_type import MigrationSource
 from fg_migration.core.canonical_types import (CanonicalGpgKey, CanonicalOrganizationMembership,
                                                CanonicalKey, CanonicalOrganization,
@@ -140,7 +140,7 @@ class GitLabMigrationSource(MigrationSource):
                                    ) -> Iterator[gitlab.v4.objects.GroupMember]:
         paginator = GitLabApiPaginator(gl_api=self.gitlab_api, page_size=self.gitlab_config.API_MAX_PAGE_SIZE, items_type="Groups")
         return paginator.iterate(fetch_page_from_api=
-            lambda gl_api, page, limit: group.members.list(
+            lambda gl_api, page, limit: group.members_all.list(
                 page=page,
                 per_page=limit,
             )
@@ -154,7 +154,7 @@ class GitLabMigrationSource(MigrationSource):
         paginator = GitLabApiPaginator(gl_api=self.gitlab_api,
                                        page_size=self.gitlab_config.API_MAX_PAGE_SIZE, items_type="Project Members")
         return paginator.iterate(fetch_page_from_api=
-            lambda gl_api, page, limit: project.members.list(
+            lambda gl_api, page, limit: project.members_all.list(
                 page=page,
                 per_page=limit,
             )
@@ -303,7 +303,7 @@ class GitLabMigrationSource(MigrationSource):
                     fg_print.error(f"Could not extract repository name for project {project.name}"
                                    f" with path {project.path_with_namespace}, skipping import")
                     continue
-                clone_url = self._build_gitlab_repo_url(owner_name, repo_name)
+                clone_url = self._build_gitlab_repo_url(project)
 
                 is_private = (project.visibility == "private" or project.visibility == "internal")
                 auth_password=self.gitlab_config.GITLAB_ADMIN_PASS
@@ -314,8 +314,8 @@ class GitLabMigrationSource(MigrationSource):
                 repo = CanonicalRepo(source_system=self.source_system,
                                      source_id=project.get_id(),
                                      is_individual=is_individual,
-                                     username=project.path,
-                                     name=project.name,
+                                     username=project.path, # repo name found in the url
+                                     name=project.name, # User friendly name
                                      owner_name=owner_name,
                                      clone_url=clone_url,
                                      is_private=is_private,
@@ -349,12 +349,11 @@ class GitLabMigrationSource(MigrationSource):
 
 
 
-    def _build_gitlab_repo_url(self, owner: str, repo: str) -> str:
+    def _build_gitlab_repo_url(self, project:gitlab.v4.objects.Project) -> str:
         if self.gitlab_config.GITLAB_SYNC_CONNECTION_TYPE == "ssh":
-            return f"git@{self.gitlab_config.GITLAB_URL.replace('https://', '') \
-                          .replace('http://', '')}:{owner}/{repo}.git"
+            return project.ssh_url_to_repo
 
-        return f"{self.gitlab_config.GITLAB_URL}/{owner}/{repo}.git"
+        return project.http_url_to_repo
 
 
 
@@ -429,7 +428,7 @@ class GitLabMigrationSource(MigrationSource):
                 for sub_group in self._iter_all_sub_groups_of_group(group=group):
                     sub_hierarchy = copy(hierarchy)
                     sub_hierarchy.append(HierarchyNode(
-                                                name=sub_hierarchy.path,
+                                                name=sub_group.path,
                                                 relation=HierarchyNode.RelationEnum.SUB))
                     sub_group_id = sub_group.get_id()
                     sub_group = self.gitlab_api.groups.get(sub_group_id)

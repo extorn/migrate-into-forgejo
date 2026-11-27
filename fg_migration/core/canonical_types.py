@@ -176,7 +176,7 @@ class CanonicalRepoMemberships:
 class CanonicalRepo:
     """A repository for code"""
     is_individual:bool # Owned by a user? (else an organization)
-    username:str
+    username:str # name found in the url
     # Note, in some systems, a user friendly name may be possible,
     # but in Forgejo, there is just the username at present.
     name:str
@@ -195,7 +195,7 @@ class CanonicalRepo:
 
     def get_safe_username(self) -> str:
         """Get Forgejo safe username"""
-        return name_clean(self.name)
+        return name_clean(self.username)
 
     def get_safe_owner_name(self) -> str:
         """Get Forgejo safe owner name"""

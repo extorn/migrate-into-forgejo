@@ -69,7 +69,9 @@ your requirements.
 ### **.migrate.ini file**
 
 You need to create a configuration file called `.migrate.ini` and store it in the same directory of the script.
-:bulb: `.migrate.ini` is listed in `.gitignore`.
+
+:bulb:
+`.migrate.ini` is listed in `.gitignore`.
 
 ```
 ###
@@ -129,6 +131,9 @@ gitlab_admin_pass = <your-gitlab-password>
 #gitlab_api_max_page_size=50
 
 [migrate]
+
+### Instance source
+source=gitlab
 
 ### If True, Add a Forgejo team for every possible gitlab group member access level
 #add_empty_teams_to_organizations=False
